@@ -1,0 +1,20 @@
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "liisgo-daycare-system",
+          "configurations": {
+            "web": "1:1042137244295:web:75218e1756ea3f975fce22"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

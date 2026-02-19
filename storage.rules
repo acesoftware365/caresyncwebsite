@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function tenantWebsiteReady(tenantId) {
+      return firestore.exists(/databases/(default)/documents/tenants/$(tenantId)) &&
+        firestore.get(/databases/(default)/documents/tenants/$(tenantId)).data.websiteReady == true;
+    }
+
+    // Public website media only when tenant website is ready.
+    match /tenants/{tenantId}/website/{allPaths=**} {
+      allow read: if tenantWebsiteReady(tenantId);
+      allow write: if signedIn();
+    }
+
+    // Everything else stays private.
+    match /{allPaths=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

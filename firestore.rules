@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function authEmail() {
+      return signedIn() && request.auth.token.email != null
+        ? request.auth.token.email
+        : null;
+    }
+    function role() { return signedIn() ? request.auth.token.role : null; }
+    function ownerAllowlisted() {
+      return signedIn() && (
+        (
+          authEmail() != null &&
+          exists(/databases/$(database)/documents/owner_allowlist/$(authEmail())) &&
+          get(/databases/$(database)/documents/owner_allowlist/$(authEmail())).data.enabled == true
+        ) ||
+        (
+          exists(/databases/$(database)/documents/system/owner_allowlist) &&
+          get(/databases/$(database)/documents/system/owner_allowlist).data.enabled == true &&
+          get(/databases/$(database)/documents/system/owner_allowlist).data.email == authEmail()
+        )
+      );
+    }
+    function isOwner() { return role() == "owner" || ownerAllowlisted(); }
+    function isSuper() { return role() == "super_admin"; }
+    function tenantId() { return request.auth.token.tenantId; }
+
+    function canAccessTenant(tenant) {
+      return isOwner() || tenantId() == tenant;
+    }
+
+    match /system/owner_allowlist {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    match /system/{doc} {
+      allow read, write: if isOwner();
+    }
+
+    match /owner_allowlist/{email} {
+      allow read, write: if isOwner();
+    }
+
+    match /tenants/{tenant} {
+
+      // Cambio minimo y seguro:
+      // Publico puede leer SOLO el doc raiz del tenant si websiteReady == true.
+      allow read: if signedIn() || resource.data.websiteReady == true;
+
+      // Igual que antes
+      allow write: if isOwner();
+
+      match /{document=**} {
+        // Sin cambios: subcolecciones siguen privadas
+        allow read: if signedIn();
+        allow write: if canAccessTenant(tenant);
+      }
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}
