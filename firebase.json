@@ -12,6 +12,7 @@
     }
   },
   "hosting": {
+    "target": "daycarefinder",
     "public": "build/web",
     "ignore": [
       "firebase.json",

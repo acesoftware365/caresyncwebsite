@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "liisgo-daycare-system"
-  }
+  },
+  "targets": {
+    "liisgo-daycare-system": {
+      "hosting": {
+        "daycarefinder": [
+          "daycarefinder"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

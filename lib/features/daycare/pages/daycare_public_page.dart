@@ -95,61 +95,77 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
         }
 
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('tenants').doc(tenantId).snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('tenants')
+              .doc(tenantId)
+              .snapshots(),
           builder: (context, docSnap) {
             if (docSnap.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
             final data = docSnap.data?.data();
-            if (data == null || ((data['websiteReady'] as bool?) ?? false) != true) {
+            if (data == null ||
+                ((data['websiteReady'] as bool?) ?? false) != true) {
               return const Center(child: Text('Not found / not ready'));
             }
 
-              final d = data;
-              final name = (d['daycareName'] ?? d['name'] ?? 'Daycare').toString();
-              final desc = (d['websiteDescription'] ?? '').toString().trim();
-              final email = (d['email'] ?? '').toString().trim();
-              final phone = _phoneFromDoc(d);
-              final logoUrl = normalizeImageUrl(
-                (d['websiteLogoUrl'] ?? '').toString(),
-                defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
-              );
-              final heroUrl = normalizeImageUrl(
-                (d['websiteHeroUrl'] ?? '').toString(),
-                defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
-              );
-              final galleryRaw = (d['websiteGalleryUrls'] as List?) ?? const [];
-              final galleryUrls = galleryRaw
-                  .map(
-                    (e) => normalizeImageUrl(
-                      e.toString(),
-                      defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
-                    ),
-                  )
-                  .where((e) => e.isNotEmpty)
-                  .toList();
+            final d = data;
+            final name = (d['daycareName'] ?? d['name'] ?? 'Daycare')
+                .toString();
+            final desc = (d['websiteDescription'] ?? '').toString().trim();
+            final email = (d['email'] ?? '').toString().trim();
+            final phone = _phoneFromDoc(d);
+            final logoUrl = normalizeImageUrl(
+              (d['websiteLogoUrl'] ?? '').toString(),
+              defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
+            );
+            final heroUrl = normalizeImageUrl(
+              (d['websiteHeroUrl'] ?? '').toString(),
+              defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
+            );
+            final galleryRaw = (d['websiteGalleryUrls'] as List?) ?? const [];
+            final galleryUrls = galleryRaw
+                .map(
+                  (e) => normalizeImageUrl(
+                    e.toString(),
+                    defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
+                  ),
+                )
+                .where((e) => e.isNotEmpty)
+                .toList();
 
-              final photos = <String>[];
-              if (heroUrl.isNotEmpty) photos.add(heroUrl);
-              for (final g in galleryUrls) {
-                if (!photos.contains(g)) photos.add(g);
-              }
+            final photos = <String>[];
+            if (heroUrl.isNotEmpty) photos.add(heroUrl);
+            for (final g in galleryUrls) {
+              if (!photos.contains(g)) photos.add(g);
+            }
 
-              final city = normalizeCity((d['addressCity'] ?? '').toString());
-              final state = normalizeStateCode((d['addressState'] ?? '').toString());
-              final zip = (d['addressZip'] ?? '').toString().trim();
-              final street =
-                  '${(d['addressHouseNumber'] ?? '').toString()} ${(d['addressStreet'] ?? '').toString()}'.trim();
-              final address = [street, city, state, zip].where((e) => e.trim().isNotEmpty).join(', ');
+            final city = normalizeCity((d['addressCity'] ?? '').toString());
+            final state = normalizeStateCode(
+              (d['addressState'] ?? '').toString(),
+            );
+            final zip = (d['addressZip'] ?? '').toString().trim();
+            final street =
+                '${(d['addressHouseNumber'] ?? '').toString()} ${(d['addressStreet'] ?? '').toString()}'
+                    .trim();
+            final address = [
+              street,
+              city,
+              state,
+              zip,
+            ].where((e) => e.trim().isNotEmpty).join(', ');
 
-              final license = (d['licenseNumber'] ?? '').toString().trim();
-              final capacity = _capacityLabel(d['capacity']);
-              final languages = ((d['languages'] as List?) ?? const [])
-                  .map((e) => e.toString().trim())
-                  .where((e) => e.isNotEmpty)
-                  .join(', ');
-              final hours = (d['hours'] ?? '').toString().trim();
-              final providerType = (d['providerType'] ?? d['daycareType'] ?? 'Daycare').toString().trim();
+            final license = (d['licenseNumber'] ?? '').toString().trim();
+            final capacity = _capacityLabel(d['capacity']);
+            final languages = ((d['languages'] as List?) ?? const [])
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .join(', ');
+            final hours = (d['hours'] ?? '').toString().trim();
+            final providerType =
+                (d['providerType'] ?? d['daycareType'] ?? 'Daycare')
+                    .toString()
+                    .trim();
 
             return Center(
               child: ConstrainedBox(
@@ -157,61 +173,62 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
                   children: [
-                      _TopHeader(
-                        name: name,
-                        city: city,
-                        state: state,
-                        zip: zip,
-                        providerType: providerType,
-                        capacity: capacity,
-                      ),
-                      const SizedBox(height: 14),
-                      _HeroGallery(
-                        photos: photos,
-                        onTapPhoto: (index) => _openGalleryLightbox(photos, index),
-                      ),
-                      const SizedBox(height: 16),
-                      LayoutBuilder(
-                        builder: (context, c) {
-                          final wide = c.maxWidth >= 980;
-                          final left = _buildMainColumn(
-                            context,
-                            name: name,
-                            desc: desc,
-                            logoUrl: logoUrl,
-                            providerType: providerType,
-                            capacity: capacity,
-                            languages: languages,
-                          );
-                          final right = _buildSideColumn(
-                            context,
-                            daycareName: name,
-                            email: email,
-                            phone: phone,
-                            address: address,
-                            website: _pickWebsite(d),
-                            hours: hours,
-                            providerType: providerType,
-                            license: license,
-                            ageLabel: _ageLabel(d),
-                          );
+                    _TopHeader(
+                      name: name,
+                      city: city,
+                      state: state,
+                      zip: zip,
+                      providerType: providerType,
+                      capacity: capacity,
+                    ),
+                    const SizedBox(height: 14),
+                    _HeroGallery(
+                      photos: photos,
+                      onTapPhoto: (index) =>
+                          _openGalleryLightbox(photos, index),
+                    ),
+                    const SizedBox(height: 16),
+                    LayoutBuilder(
+                      builder: (context, c) {
+                        final wide = c.maxWidth >= 980;
+                        final left = _buildMainColumn(
+                          context,
+                          name: name,
+                          desc: desc,
+                          logoUrl: logoUrl,
+                          providerType: providerType,
+                          capacity: capacity,
+                          languages: languages,
+                        );
+                        final right = _buildSideColumn(
+                          context,
+                          daycareName: name,
+                          email: email,
+                          phone: phone,
+                          address: address,
+                          website: _pickWebsite(d),
+                          hours: hours,
+                          providerType: providerType,
+                          license: license,
+                          ageLabel: _ageLabel(d),
+                        );
 
-                          if (!wide) {
-                            return Column(
-                              children: [left, const SizedBox(height: 14), right],
-                            );
-                          }
-
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 7, child: left),
-                              const SizedBox(width: 14),
-                              Expanded(flex: 4, child: right),
-                            ],
+                        if (!wide) {
+                          return Column(
+                            children: [left, const SizedBox(height: 14), right],
                           );
-                        },
-                      ),
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 7, child: left),
+                            const SizedBox(width: 14),
+                            Expanded(flex: 4, child: right),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -250,16 +267,19 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                         children: [
                           Text(
                             name,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 6),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              _Tag(label: providerType.isEmpty ? 'Daycare' : providerType),
+                              _Tag(
+                                label: providerType.isEmpty
+                                    ? 'Daycare'
+                                    : providerType,
+                              ),
                               if (capacity.isNotEmpty) _Tag(label: capacity),
                               if (languages.isNotEmpty) _Tag(label: languages),
                             ],
@@ -272,7 +292,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                 const SizedBox(height: 18),
                 _TabHeader(),
                 const SizedBox(height: 14),
-                Text('About $name', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'About $name',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   desc.isEmpty
@@ -291,13 +316,27 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Program Snapshot', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'Program Snapshot',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 12),
                 _FactsGrid(
                   facts: [
-                    _Fact(label: 'Provider Type', value: providerType.isEmpty ? 'Daycare' : providerType),
-                    _Fact(label: 'Capacity', value: capacity.isEmpty ? 'N/A' : capacity),
-                    _Fact(label: 'Languages', value: languages.isEmpty ? 'N/A' : languages),
+                    _Fact(
+                      label: 'Provider Type',
+                      value: providerType.isEmpty ? 'Daycare' : providerType,
+                    ),
+                    _Fact(
+                      label: 'Capacity',
+                      value: capacity.isEmpty ? 'N/A' : capacity,
+                    ),
+                    _Fact(
+                      label: 'Languages',
+                      value: languages.isEmpty ? 'N/A' : languages,
+                    ),
                   ],
                 ),
               ],
@@ -311,7 +350,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Parent Reviews', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'Parent Reviews',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'No reviews yet. Be the first family to share feedback.',
@@ -352,11 +396,18 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     final phoneHref = phoneDigits.isEmpty ? null : 'tel:$phoneDigits';
     final emailHref = email.isEmpty
         ? null
-        : 'mailto:${email.trim()}?subject=${Uri.encodeQueryComponent('Website inquiry for $daycareName')}&body=${Uri.encodeQueryComponent('Hi $daycareName,\n\nI would like more information about your daycare.\n')}';
+        : _buildMailtoUri(
+            to: email,
+            subject: 'Website inquiry for $daycareName',
+            body:
+                'Hi $daycareName,\n\nI would like more information about your daycare.\n',
+          ).toString();
     final websiteValue = website.trim();
     final websiteHref = websiteValue.isEmpty
         ? null
-        : (websiteValue.startsWith('http') ? websiteValue : 'https://$websiteValue');
+        : (websiteValue.startsWith('http')
+              ? websiteValue
+              : 'https://$websiteValue');
 
     return Column(
       children: [
@@ -367,7 +418,10 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Openings Available', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22)),
+                Text(
+                  'Openings Available',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
+                ),
                 SizedBox(height: 6),
                 Text(
                   'Please contact us for enrollment details and current availability.',
@@ -383,7 +437,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(daycareName, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  daycareName,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 8),
                 if (address.isNotEmpty)
                   _ActionRow(
@@ -407,7 +466,8 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                     onTap: () => _openEmail(
                       to: email,
                       subject: 'Website inquiry for $daycareName',
-                      body: 'Hi $daycareName,\n\nI would like more information about your daycare.\n',
+                      body:
+                          'Hi $daycareName,\n\nI would like more information about your daycare.\n',
                     ),
                   ),
                 if (website.isNotEmpty)
@@ -418,10 +478,24 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                     onTap: () => _openWebsite(website),
                   ),
                 const Divider(height: 22),
-                _MiniDetail(title: 'Hours & Availability', value: hours.isEmpty ? 'Please contact for current schedule.' : hours),
-                _MiniDetail(title: 'Ages', value: ageLabel.isEmpty ? 'N/A' : ageLabel),
-                _MiniDetail(title: 'Provider Type', value: providerType.isEmpty ? 'Daycare' : providerType),
-                _MiniDetail(title: 'License Number', value: license.isEmpty ? 'N/A' : license),
+                _MiniDetail(
+                  title: 'Hours & Availability',
+                  value: hours.isEmpty
+                      ? 'Please contact for current schedule.'
+                      : hours,
+                ),
+                _MiniDetail(
+                  title: 'Ages',
+                  value: ageLabel.isEmpty ? 'N/A' : ageLabel,
+                ),
+                _MiniDetail(
+                  title: 'Provider Type',
+                  value: providerType.isEmpty ? 'Daycare' : providerType,
+                ),
+                _MiniDetail(
+                  title: 'License Number',
+                  value: license.isEmpty ? 'N/A' : license,
+                ),
               ],
             ),
           ),
@@ -436,7 +510,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Request Information', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(
+                    'Request Information',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Tell us about your family so we can help connect you with the best care options.',
@@ -449,7 +528,9 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       labelText: 'Your Name',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    validator: (v) => (v ?? '').trim().isEmpty ? 'Please enter your name' : null,
+                    validator: (v) => (v ?? '').trim().isEmpty
+                        ? 'Please enter your name'
+                        : null,
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
@@ -509,7 +590,9 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                     validator: (v) {
                       final value = (v ?? '').trim();
                       if (value.isEmpty) return null;
-                      final m = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(value);
+                      final m = RegExp(
+                        r'^(\d{2})/(\d{2})/(\d{4})$',
+                      ).firstMatch(value);
                       if (m == null) return 'Use format MM/DD/YYYY';
                       final month = int.parse(m.group(1)!);
                       final day = int.parse(m.group(2)!);
@@ -517,7 +600,10 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       final dt = DateTime.tryParse(
                         '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}',
                       );
-                      if (dt == null || dt.month != month || dt.day != day || dt.year != year) {
+                      if (dt == null ||
+                          dt.month != month ||
+                          dt.day != day ||
+                          dt.year != year) {
                         return 'Enter a valid date (MM/DD/YYYY)';
                       }
                       return null;
@@ -532,7 +618,9 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       alignLabelWithHint: true,
                       prefixIcon: Icon(Icons.message_outlined),
                     ),
-                    validator: (v) => (v ?? '').trim().isEmpty ? 'Please enter a message' : null,
+                    validator: (v) => (v ?? '').trim().isEmpty
+                        ? 'Please enter a message'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
@@ -581,7 +669,9 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
   Future<void> _openWebsite(String website) async {
     final value = website.trim();
     if (value.isEmpty) return;
-    final uri = Uri.tryParse(value.startsWith('http') ? value : 'https://$value');
+    final uri = Uri.tryParse(
+      value.startsWith('http') ? value : 'https://$value',
+    );
     if (uri == null) return;
     await _launchWithFallback(
       uri,
@@ -595,18 +685,23 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     required String subject,
     required String body,
   }) async {
-    final uri = Uri(
-      scheme: 'mailto',
-      path: to.trim(),
-      queryParameters: <String, String>{
-        'subject': subject,
-        'body': body,
-      },
-    );
+    final uri = _buildMailtoUri(to: to, subject: subject, body: body);
     await _launchWithFallback(
       uri,
       fallbackText: to,
       errorMessage: 'Could not open email client. Email copied to clipboard.',
+    );
+  }
+
+  Uri _buildMailtoUri({
+    required String to,
+    required String subject,
+    required String body,
+  }) {
+    final encodedSubject = Uri.encodeComponent(subject).replaceAll('+', '%20');
+    final encodedBody = Uri.encodeComponent(body).replaceAll('+', '%20');
+    return Uri.parse(
+      'mailto:${to.trim()}?subject=$encodedSubject&body=$encodedBody',
     );
   }
 
@@ -619,9 +714,18 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     bool ok = false;
     final attempts = <_LaunchAttempt>[
       const _LaunchAttempt(mode: LaunchMode.platformDefault),
-      const _LaunchAttempt(mode: LaunchMode.platformDefault, webOnlyWindowName: '_blank'),
-      const _LaunchAttempt(mode: LaunchMode.platformDefault, webOnlyWindowName: '_self'),
-      const _LaunchAttempt(mode: LaunchMode.externalApplication, webOnlyWindowName: '_blank'),
+      const _LaunchAttempt(
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_blank',
+      ),
+      const _LaunchAttempt(
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_self',
+      ),
+      const _LaunchAttempt(
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      ),
       const _LaunchAttempt(mode: LaunchMode.externalApplication),
       const _LaunchAttempt(mode: LaunchMode.externalNonBrowserApplication),
     ];
@@ -683,7 +787,8 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     final childBirthday = _contactChildBirthdayCtrl.text.trim();
     final message = _contactMessageCtrl.text.trim();
 
-    final body = '''
+    final body =
+        '''
 Hi $daycareName,
 
 $message
@@ -707,7 +812,10 @@ $senderName
     );
   }
 
-  Future<void> _openGalleryLightbox(List<String> galleryUrls, int initialIndex) async {
+  Future<void> _openGalleryLightbox(
+    List<String> galleryUrls,
+    int initialIndex,
+  ) async {
     if (galleryUrls.isEmpty) return;
     final controller = PageController(initialPage: initialIndex);
     var current = initialIndex;
@@ -733,7 +841,8 @@ $senderName
                             child: PageView.builder(
                               controller: controller,
                               itemCount: galleryUrls.length,
-                              onPageChanged: (i) => setLocalState(() => current = i),
+                              onPageChanged: (i) =>
+                                  setLocalState(() => current = i),
                               itemBuilder: (context, index) {
                                 final url = galleryUrls[index];
                                 return InteractiveViewer(
@@ -743,9 +852,14 @@ $senderName
                                     child: SmartNetworkImage(
                                       urls: candidateImageUrls(url),
                                       fit: BoxFit.contain,
-                                      placeholder: const Center(child: CircularProgressIndicator()),
+                                      placeholder: const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
                                       fallback: const Center(
-                                        child: Icon(Icons.broken_image_outlined, color: Colors.white),
+                                        child: Icon(
+                                          Icons.broken_image_outlined,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -755,7 +869,10 @@ $senderName
                           ),
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             color: const Color(0xCC000000),
                             child: Text(
                               'Photo ${current + 1} of ${galleryUrls.length}',
@@ -815,7 +932,11 @@ class _TopHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final location = [city, state, zip].where((e) => e.trim().isNotEmpty).join(', ');
+    final location = [
+      city,
+      state,
+      zip,
+    ].where((e) => e.trim().isNotEmpty).join(', ');
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -829,15 +950,23 @@ class _TopHeader extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE4F3DF),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Text('Verified', style: TextStyle(fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Verified',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
@@ -874,7 +1003,10 @@ class _HeroGallery extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: SizedBox(
           height: 320,
-          child: _imageFallback(context, icon: Icons.photo_size_select_actual_outlined),
+          child: _imageFallback(
+            context,
+            icon: Icons.photo_size_select_actual_outlined,
+          ),
         ),
       );
     }
@@ -893,7 +1025,10 @@ class _HeroGallery extends StatelessWidget {
                   urls: candidateImageUrls(photos.first),
                   fit: BoxFit.cover,
                   placeholder: _imageLoading(context),
-                  fallback: _imageFallback(context, icon: Icons.broken_image_outlined),
+                  fallback: _imageFallback(
+                    context,
+                    icon: Icons.broken_image_outlined,
+                  ),
                 ),
               ),
             ),
@@ -915,7 +1050,10 @@ class _HeroGallery extends StatelessWidget {
                       urls: candidateImageUrls(photos.first),
                       fit: BoxFit.cover,
                       placeholder: _imageLoading(context),
-                      fallback: _imageFallback(context, icon: Icons.broken_image_outlined),
+                      fallback: _imageFallback(
+                        context,
+                        icon: Icons.broken_image_outlined,
+                      ),
                     ),
                   ),
                 ),
@@ -944,7 +1082,10 @@ class _HeroGallery extends StatelessWidget {
                               urls: candidateImageUrls(sidePhotos[i]),
                               fit: BoxFit.cover,
                               placeholder: _imageLoading(context),
-                              fallback: _imageFallback(context, icon: Icons.broken_image_outlined),
+                              fallback: _imageFallback(
+                                context,
+                                icon: Icons.broken_image_outlined,
+                              ),
                             ),
                             if (i == sidePhotos.length - 1 && photos.length > 5)
                               Container(
@@ -952,7 +1093,10 @@ class _HeroGallery extends StatelessWidget {
                                 alignment: Alignment.center,
                                 child: Text(
                                   '+${photos.length - 5} Photos',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                           ],
@@ -1007,7 +1151,9 @@ class _TabItem extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           label,
-          style: TextStyle(fontWeight: active ? FontWeight.w700 : FontWeight.w600),
+          style: TextStyle(
+            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -1045,13 +1191,18 @@ class _FactsGrid extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(fact.label, style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    fact.label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     fact.value,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -1081,7 +1232,12 @@ class _MiniDetail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 2),
           Text(value, style: Theme.of(context).textTheme.bodyMedium),
         ],
@@ -1123,7 +1279,9 @@ class _ActionRow extends StatelessWidget {
             children: [
               Icon(icon, size: 18),
               const SizedBox(width: 8),
-              Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              Expanded(
+                child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
         ),
@@ -1167,14 +1325,22 @@ class _Tag extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
-      child: Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700)),
+      child: Text(
+        label,
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
 
 class _UsPhoneFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
     final trimmed = digits.length > 10 ? digits.substring(0, 10) : digits;
     final b = StringBuffer();
@@ -1192,7 +1358,10 @@ class _UsPhoneFormatter extends TextInputFormatter {
 
 class _UsDateFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
     final trimmed = digits.length > 8 ? digits.substring(0, 8) : digits;
     final b = StringBuffer();
@@ -1216,11 +1385,7 @@ String _phoneFromDoc(Map<String, dynamic> d) {
 }
 
 String _pickWebsite(Map<String, dynamic> d) {
-  final candidates = [
-    d['websiteUrl'],
-    d['website'],
-    d['siteUrl'],
-  ];
+  final candidates = [d['websiteUrl'], d['website'], d['siteUrl']];
   for (final c in candidates) {
     final value = (c ?? '').toString().trim();
     if (value.isNotEmpty) return value;
