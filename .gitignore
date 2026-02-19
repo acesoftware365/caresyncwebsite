@@ -46,3 +46,4 @@ app.*.map.json
 
 # Local cloud credentials/state
 .gcloud/
+.firebase/
