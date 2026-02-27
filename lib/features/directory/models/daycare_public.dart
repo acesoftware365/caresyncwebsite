@@ -79,7 +79,7 @@ class DaycarePublic {
       city: city,
       state: state,
       addressLine: addressLine,
-      email: (d['email'] ?? '').toString(),
+      email: ((d['businessEmail'] ?? d['email']) ?? '').toString(),
       phone: phone,
       licenseNumber: (d['licenseNumber'] ?? '').toString(),
       languages: languages,
