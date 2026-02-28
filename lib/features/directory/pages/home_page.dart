@@ -549,16 +549,14 @@ class _PromoSection extends StatelessWidget {
         const SizedBox(height: 10),
         if (small.isNotEmpty) ...[
           Text(
-            'Small Carousel',
+            'Highlights',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
           ),
           const SizedBox(height: 8),
-          _PromoCarousel(
+          _PromoSmallGrid(
             promos: small,
-            rotationSeconds: rotationSeconds,
-            large: false,
             onOpenUrl: onOpenUrl,
           ),
           const SizedBox(height: 12),
@@ -579,6 +577,46 @@ class _PromoSection extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _PromoSmallGrid extends StatelessWidget {
+  const _PromoSmallGrid({
+    required this.promos,
+    required this.onOpenUrl,
+  });
+
+  final List<_PromoItem> promos;
+  final ValueChanged<String> onOpenUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = constraints.maxWidth >= 980
+            ? 3
+            : (constraints.maxWidth >= 620 ? 2 : 1);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: promos.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.02,
+          ),
+          itemBuilder: (context, i) {
+            final p = promos[i];
+            return _PromoCardTile(
+              promo: p,
+              large: false,
+              onOpenUrl: onOpenUrl,
+            );
+          },
+        );
+      },
     );
   }
 }
