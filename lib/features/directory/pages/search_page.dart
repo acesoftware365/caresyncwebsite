@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../services/location_text.dart';
+import '../constants/search_options.dart';
 import '../models/daycare_public.dart';
 import '../services/daycare_directory_service.dart';
 import '../widgets/daycare_cards.dart';
@@ -21,11 +22,12 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
 
   final nameCtrl = TextEditingController();
   final cityCtrl = TextEditingController();
+  final zipCtrl = TextEditingController();
   final licenseCtrl = TextEditingController();
-  final languageCtrl = TextEditingController();
   final capacityCtrl = TextEditingController();
 
-  String state2 = 'CT';
+  String state2 = '';
+  String languageValue = '';
 
   @override
   void initState() {
@@ -34,9 +36,13 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
 
     nameCtrl.text = widget.query['name'] ?? '';
     cityCtrl.text = normalizeCity(widget.query['city'] ?? '');
-    state2 = normalizeStateCode(widget.query['state'] ?? 'CT');
+    zipCtrl.text = widget.query['zip'] ?? '';
+    state2 = normalizeStateCode(widget.query['state'] ?? '');
     licenseCtrl.text = widget.query['license'] ?? '';
-    languageCtrl.text = widget.query['language'] ?? '';
+    final incomingLanguage = (widget.query['language'] ?? '').trim();
+    languageValue = directoryLanguages.contains(incomingLanguage)
+        ? incomingLanguage
+        : '';
     capacityCtrl.text = widget.query['capacity'] ?? '';
 
     _runSearch();
@@ -46,10 +52,28 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
   void dispose() {
     nameCtrl.dispose();
     cityCtrl.dispose();
+    zipCtrl.dispose();
     licenseCtrl.dispose();
-    languageCtrl.dispose();
     capacityCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant DirectorySearchPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query.toString() == widget.query.toString()) return;
+
+    nameCtrl.text = widget.query['name'] ?? '';
+    cityCtrl.text = normalizeCity(widget.query['city'] ?? '');
+    zipCtrl.text = widget.query['zip'] ?? '';
+    state2 = normalizeStateCode(widget.query['state'] ?? '');
+    licenseCtrl.text = widget.query['license'] ?? '';
+    final incomingLanguage = (widget.query['language'] ?? '').trim();
+    languageValue = directoryLanguages.contains(incomingLanguage)
+        ? incomingLanguage
+        : '';
+    capacityCtrl.text = widget.query['capacity'] ?? '';
+    _runSearch();
   }
 
   void _runSearch() {
@@ -58,7 +82,8 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
       name: nameCtrl.text,
       city: cityCtrl.text,
       state: state2,
-      language: languageCtrl.text,
+      zip: zipCtrl.text,
+      language: languageValue,
       license: licenseCtrl.text,
       minCapacity: minCap,
     );
@@ -72,9 +97,10 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
     if (nameCtrl.text.trim().isNotEmpty) qp['name'] = nameCtrl.text.trim();
     final city = normalizeCity(cityCtrl.text);
     if (city.isNotEmpty) qp['city'] = city;
+    if (zipCtrl.text.trim().isNotEmpty) qp['zip'] = zipCtrl.text.trim();
     final state = normalizeStateCode(state2);
     if (state.isNotEmpty) qp['state'] = state;
-    if (languageCtrl.text.trim().isNotEmpty) qp['language'] = languageCtrl.text.trim();
+    if (languageValue.trim().isNotEmpty) qp['language'] = languageValue.trim();
     if (licenseCtrl.text.trim().isNotEmpty) qp['license'] = licenseCtrl.text.trim();
     if (capacityCtrl.text.trim().isNotEmpty) qp['capacity'] = capacityCtrl.text.trim();
     context.go(Uri(path: '/search', queryParameters: qp).toString());
@@ -82,22 +108,36 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1100),
-        child: ListView(
-          padding: const EdgeInsets.all(18),
-          children: [
+    final cfgStream =
+        FirebaseFirestore.instance.doc('system/daycarefinder_config').snapshots();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: cfgStream,
+      builder: (context, cfgSnap) {
+        final paletteId = (cfgSnap.data?.data()?['palette'] ?? 'blush')
+            .toString()
+            .trim();
+        final palette = _finderPalettes[paletteId] ?? _finderPalettes['blush']!;
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1100),
+            child: ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
               Container(
                 margin: const EdgeInsets.only(bottom: 14),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFEDF3), Color(0xFFFFF8FB)],
+                  gradient: LinearGradient(
+                    colors: [
+                      palette.sixty,
+                      Color.lerp(palette.sixty, palette.thirty, 0.55)!,
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
+                  border: Border.all(color: palette.thirty.withAlpha(170)),
                 ),
                 child: Text(
                   'Use filters to quickly find the best daycare fit for your family.',
@@ -107,9 +147,12 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
               _FiltersCard(
                 nameCtrl: nameCtrl,
                 cityCtrl: cityCtrl,
+                zipCtrl: zipCtrl,
                 state2: state2,
+                palette: palette,
                 onStateChanged: (v) => setState(() => state2 = v),
-                languageCtrl: languageCtrl,
+                languageValue: languageValue,
+                onLanguageChanged: (v) => setState(() => languageValue = v),
                 licenseCtrl: licenseCtrl,
                 capacityCtrl: capacityCtrl,
                 onSearch: () {
@@ -119,10 +162,11 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
                 onClear: () {
                   nameCtrl.clear();
                   cityCtrl.clear();
+                  zipCtrl.clear();
                   licenseCtrl.clear();
-                  languageCtrl.clear();
+                  setState(() => languageValue = '');
                   capacityCtrl.clear();
-                  setState(() => state2 = 'CT');
+                  setState(() => state2 = '');
                   context.go('/search');
                   _runSearch();
                 },
@@ -139,8 +183,9 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
                   }
                   final items = snap.data ?? const [];
                   if (items.isEmpty) {
-                    return const Card(
-                      child: Padding(
+                    return Card(
+                      color: palette.sixty.withAlpha(185),
+                      child: const Padding(
                         padding: EdgeInsets.all(16),
                         child: Text('No results found. Try different filters.'),
                       ),
@@ -163,9 +208,11 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
                   );
                 },
               ),
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -174,9 +221,12 @@ class _FiltersCard extends StatelessWidget {
   const _FiltersCard({
     required this.nameCtrl,
     required this.cityCtrl,
+    required this.zipCtrl,
     required this.state2,
+    required this.palette,
     required this.onStateChanged,
-    required this.languageCtrl,
+    required this.languageValue,
+    required this.onLanguageChanged,
     required this.licenseCtrl,
     required this.capacityCtrl,
     required this.onSearch,
@@ -185,9 +235,12 @@ class _FiltersCard extends StatelessWidget {
 
   final TextEditingController nameCtrl;
   final TextEditingController cityCtrl;
+  final TextEditingController zipCtrl;
   final String state2;
+  final _FinderPalette palette;
   final ValueChanged<String> onStateChanged;
-  final TextEditingController languageCtrl;
+  final String languageValue;
+  final ValueChanged<String> onLanguageChanged;
   final TextEditingController licenseCtrl;
   final TextEditingController capacityCtrl;
   final VoidCallback onSearch;
@@ -196,6 +249,7 @@ class _FiltersCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: palette.sixty.withAlpha(170),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -228,32 +282,50 @@ class _FiltersCard extends StatelessWidget {
                   ),
                 ),
                 SizedBox(
+                  width: 160,
+                  child: TextField(
+                    controller: zipCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'ZIP Code',
+                      prefixIcon: Icon(Icons.pin_drop_outlined),
+                    ),
+                  ),
+                ),
+                SizedBox(
                   width: 140,
                   child: DropdownButtonFormField<String>(
                     initialValue: state2,
                     decoration: const InputDecoration(labelText: 'State'),
-                    items: const [
-                      DropdownMenuItem(value: 'CT', child: Text('CT')),
-                      DropdownMenuItem(value: 'NY', child: Text('NY')),
-                      DropdownMenuItem(value: 'NJ', child: Text('NJ')),
-                      DropdownMenuItem(value: 'MA', child: Text('MA')),
-                      DropdownMenuItem(value: 'PA', child: Text('PA')),
-                      DropdownMenuItem(value: 'RI', child: Text('RI')),
-                      DropdownMenuItem(value: 'VT', child: Text('VT')),
-                      DropdownMenuItem(value: 'NH', child: Text('NH')),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('Any State'),
+                      ),
+                      ...usStateCodes
+                          .map((code) =>
+                              DropdownMenuItem(value: code, child: Text(code))),
                     ],
-                    onChanged: (v) => onStateChanged((v ?? 'CT').toUpperCase()),
+                    onChanged: (v) => onStateChanged((v ?? '').toUpperCase()),
                   ),
                 ),
                 SizedBox(
-                  width: 220,
-                  child: TextField(
-                    controller: languageCtrl,
+                  width: 240,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: languageValue,
                     decoration: const InputDecoration(
                       labelText: 'Language',
-                      hintText: 'Spanish, English...',
                       prefixIcon: Icon(Icons.language_outlined),
                     ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('Any Language'),
+                      ),
+                      ...directoryLanguages.map((lang) =>
+                          DropdownMenuItem(value: lang, child: Text(lang))),
+                    ],
+                    onChanged: (v) => onLanguageChanged(v ?? ''),
                   ),
                 ),
                 SizedBox(
@@ -286,9 +358,20 @@ class _FiltersCard extends StatelessWidget {
                   onPressed: onSearch,
                   icon: const Icon(Icons.search),
                   label: const Text('Search'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: palette.accent,
+                    foregroundColor: _bestTextOn(palette.accent),
+                  ),
                 ),
                 const SizedBox(width: 10),
-                OutlinedButton(onPressed: onClear, child: const Text('Clear')),
+                OutlinedButton(
+                  onPressed: onClear,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: palette.accent,
+                    side: BorderSide(color: palette.thirty.withAlpha(220)),
+                  ),
+                  child: const Text('Clear'),
+                ),
               ],
             ),
           ],
@@ -296,4 +379,58 @@ class _FiltersCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FinderPalette {
+  const _FinderPalette({
+    required this.sixty,
+    required this.thirty,
+    required this.accent,
+  });
+
+  final Color sixty;
+  final Color thirty;
+  final Color accent;
+}
+
+const Map<String, _FinderPalette> _finderPalettes = {
+  'blush': _FinderPalette(
+    sixty: Color(0xFFFFF0F5),
+    thirty: Color(0xFFF8C7D8),
+    accent: Color(0xFFD94F82),
+  ),
+  'coastal': _FinderPalette(
+    sixty: Color(0xFFEAF4F8),
+    thirty: Color(0xFFBBD6E3),
+    accent: Color(0xFF1E6F8C),
+  ),
+  'sunset': _FinderPalette(
+    sixty: Color(0xFFF9EFE5),
+    thirty: Color(0xFFD9BBA0),
+    accent: Color(0xFFB4542D),
+  ),
+  'garden': _FinderPalette(
+    sixty: Color(0xFFEEF5EC),
+    thirty: Color(0xFFC4D9B8),
+    accent: Color(0xFF3F7F4A),
+  ),
+  'lavender': _FinderPalette(
+    sixty: Color(0xFFF3F0FF),
+    thirty: Color(0xFFD7CCFF),
+    accent: Color(0xFF6C4BC8),
+  ),
+  'sunflower': _FinderPalette(
+    sixty: Color(0xFFFFF8E8),
+    thirty: Color(0xFFFDE2A4),
+    accent: Color(0xFFC27A00),
+  ),
+  'slate': _FinderPalette(
+    sixty: Color(0xFFF1F5F9),
+    thirty: Color(0xFFCBD5E1),
+    accent: Color(0xFF334155),
+  ),
+};
+
+Color _bestTextOn(Color color) {
+  return color.computeLuminance() > 0.55 ? Colors.black : Colors.white;
 }

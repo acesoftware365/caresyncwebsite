@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 
 import 'site_shell.dart';
@@ -31,11 +32,68 @@ class DaycareWebsitesApp extends StatelessWidget {
       ],
     );
 
-    return MaterialApp.router(
-      debugShowCheckedModeBanner: false,
-      title: 'Daycare Finder',
-      theme: buildPublicTheme(),
-      routerConfig: router,
+    final cfgStream =
+        FirebaseFirestore.instance.doc('system/daycarefinder_config').snapshots();
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: cfgStream,
+      builder: (context, snap) {
+        final paletteId = (snap.data?.data()?['palette'] ?? 'blush')
+            .toString()
+            .trim();
+        final palette = _themePalettes[paletteId] ?? _themePalettes['blush']!;
+
+        return MaterialApp.router(
+          debugShowCheckedModeBanner: false,
+          title: 'Daycare Finder',
+          theme: buildPublicTheme(
+            seed: palette.seed,
+            scaffold: palette.scaffold,
+          ),
+          routerConfig: router,
+        );
+      },
     );
   }
 }
+
+class _ThemePalette {
+  const _ThemePalette({
+    required this.seed,
+    required this.scaffold,
+  });
+
+  final Color seed;
+  final Color scaffold;
+}
+
+const Map<String, _ThemePalette> _themePalettes = {
+  'blush': _ThemePalette(
+    seed: Color(0xFFD94F82),
+    scaffold: Color(0xFFFFF7FA),
+  ),
+  'coastal': _ThemePalette(
+    seed: Color(0xFF1E6F8C),
+    scaffold: Color(0xFFF3FAFD),
+  ),
+  'sunset': _ThemePalette(
+    seed: Color(0xFFB4542D),
+    scaffold: Color(0xFFFFF8F2),
+  ),
+  'garden': _ThemePalette(
+    seed: Color(0xFF3F7F4A),
+    scaffold: Color(0xFFF5FBF4),
+  ),
+  'lavender': _ThemePalette(
+    seed: Color(0xFF6C4BC8),
+    scaffold: Color(0xFFF8F5FF),
+  ),
+  'sunflower': _ThemePalette(
+    seed: Color(0xFFC27A00),
+    scaffold: Color(0xFFFFFBF0),
+  ),
+  'slate': _ThemePalette(
+    seed: Color(0xFF334155),
+    scaffold: Color(0xFFF7FAFC),
+  ),
+};

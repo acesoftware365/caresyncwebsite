@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 
 class SiteShell extends StatefulWidget {
@@ -15,24 +16,38 @@ class _SiteShellState extends State<SiteShell> {
     final width = MediaQuery.sizeOf(context).width;
     final compactNav = width < 900;
 
-    return Scaffold(
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFBFD),
-              border: Border(bottom: BorderSide(color: Colors.black.withAlpha(20))),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: compactNav ? _compactNav(context) : _desktopNav(context),
-            ),
+    final cfgStream =
+        FirebaseFirestore.instance.doc('system/daycarefinder_config').snapshots();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: cfgStream,
+      builder: (context, snap) {
+        final paletteId = (snap.data?.data()?['palette'] ?? 'blush')
+            .toString()
+            .trim();
+        final palette = _shellPalettes[paletteId] ?? _shellPalettes['blush']!;
+
+        return Scaffold(
+          body: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: palette.sixty.withAlpha(210),
+                  border: Border(
+                    bottom: BorderSide(color: palette.thirty.withAlpha(180)),
+                  ),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: compactNav ? _compactNav(context) : _desktopNav(context),
+                ),
+              ),
+              Expanded(child: widget.child),
+              _SiteFooter(palette: palette),
+            ],
           ),
-          Expanded(child: widget.child),
-          const _SiteFooter(),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -86,7 +101,8 @@ class _SiteShellState extends State<SiteShell> {
 }
 
 class _SiteFooter extends StatelessWidget {
-  const _SiteFooter();
+  const _SiteFooter({required this.palette});
+  final _ShellPalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -99,8 +115,8 @@ class _SiteFooter extends StatelessWidget {
           ? const EdgeInsets.fromLTRB(14, 12, 14, 10)
           : const EdgeInsets.fromLTRB(20, 22, 20, 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3F8),
-        border: Border(top: BorderSide(color: Colors.black.withAlpha(18))),
+        color: palette.sixty.withAlpha(185),
+        border: Border(top: BorderSide(color: palette.thirty.withAlpha(180))),
       ),
       child: Center(
         child: ConstrainedBox(
@@ -131,7 +147,7 @@ class _SiteFooter extends StatelessWidget {
           runSpacing: 4,
           children: [
             Text('Powered by Liisgo Daycare System', style: textTheme.bodySmall),
-            Text('Version 1.0.6', style: textTheme.bodySmall),
+            Text('Version 1.0.19', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -193,7 +209,7 @@ class _SiteFooter extends StatelessWidget {
               style: textTheme.bodySmall,
             ),
             Text(
-              'Version 1.0.6',
+              'Version 1.0.19',
               style: textTheme.bodySmall,
             ),
           ],
@@ -202,6 +218,47 @@ class _SiteFooter extends StatelessWidget {
     );
   }
 }
+
+class _ShellPalette {
+  const _ShellPalette({
+    required this.sixty,
+    required this.thirty,
+  });
+
+  final Color sixty;
+  final Color thirty;
+}
+
+const Map<String, _ShellPalette> _shellPalettes = {
+  'blush': _ShellPalette(
+    sixty: Color(0xFFFFF0F5),
+    thirty: Color(0xFFF8C7D8),
+  ),
+  'coastal': _ShellPalette(
+    sixty: Color(0xFFEAF4F8),
+    thirty: Color(0xFFBBD6E3),
+  ),
+  'sunset': _ShellPalette(
+    sixty: Color(0xFFF9EFE5),
+    thirty: Color(0xFFD9BBA0),
+  ),
+  'garden': _ShellPalette(
+    sixty: Color(0xFFEEF5EC),
+    thirty: Color(0xFFC4D9B8),
+  ),
+  'lavender': _ShellPalette(
+    sixty: Color(0xFFF3F0FF),
+    thirty: Color(0xFFD7CCFF),
+  ),
+  'sunflower': _ShellPalette(
+    sixty: Color(0xFFFFF8E8),
+    thirty: Color(0xFFFDE2A4),
+  ),
+  'slate': _ShellPalette(
+    sixty: Color(0xFFF1F5F9),
+    thirty: Color(0xFFCBD5E1),
+  ),
+};
 
 class _FooterCol extends StatelessWidget {
   const _FooterCol({required this.title, required this.items, required this.compact});

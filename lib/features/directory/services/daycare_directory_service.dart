@@ -7,6 +7,7 @@ class DaycareSearchFilters {
     this.name = '',
     this.city = '',
     this.state = '',
+    this.zip = '',
     this.language = '',
     this.license = '',
     this.minCapacity,
@@ -15,6 +16,7 @@ class DaycareSearchFilters {
   final String name;
   final String city;
   final String state;
+  final String zip;
   final String language;
   final String license;
   final int? minCapacity;
@@ -63,12 +65,18 @@ class DaycareDirectoryService {
     final langQ = f.language.trim().toLowerCase();
     final licQ = f.license.trim().toLowerCase();
     final minCap = f.minCapacity;
-    final cityQ = normalizeCity(f.city);
+    final cityQ = normalizeCity(f.city).toLowerCase();
     final stateQ = normalizeStateCode(f.state);
+    final zipQ = f.zip.trim();
 
     var out = items;
-    if (cityQ.isNotEmpty) out = out.where((x) => normalizeCity(x.city) == cityQ).toList();
+    if (cityQ.isNotEmpty) {
+      out = out
+          .where((x) => normalizeCity(x.city).toLowerCase().contains(cityQ))
+          .toList();
+    }
     if (stateQ.isNotEmpty) out = out.where((x) => normalizeStateCode(x.state) == stateQ).toList();
+    if (zipQ.isNotEmpty) out = out.where((x) => x.zip.contains(zipQ)).toList();
     if (nameQ.isNotEmpty) out = out.where((x) => x.name.toLowerCase().contains(nameQ)).toList();
     if (langQ.isNotEmpty) out = out.where((x) => x.languages.any((l) => l.toLowerCase().contains(langQ))).toList();
     if (licQ.isNotEmpty) out = out.where((x) => x.licenseNumber.toLowerCase().contains(licQ)).toList();

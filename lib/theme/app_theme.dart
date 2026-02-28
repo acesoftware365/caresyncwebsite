@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-ThemeData buildPublicTheme() {
-  const seed = Color(0xFFFFB3C7);
+ThemeData buildPublicTheme({
+  required Color seed,
+  required Color scaffold,
+}) {
   final base = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
@@ -9,18 +11,27 @@ ThemeData buildPublicTheme() {
   );
 
   return base.copyWith(
-    scaffoldBackgroundColor: const Color(0xFFFFFBFD),
-    cardTheme: const CardThemeData(
+    scaffoldBackgroundColor: scaffold,
+    cardTheme: CardThemeData(
+      color: Colors.white.withAlpha(230),
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(18))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(18)),
+      ),
     ),
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
+    inputDecorationTheme: InputDecorationTheme(
+      border: const OutlineInputBorder(),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: seed.withAlpha(110)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: seed.withAlpha(190), width: 1.3),
+      ),
       isDense: true,
     ),
     appBarTheme: base.appBarTheme.copyWith(
-      backgroundColor: const Color(0xFFFFFBFD),
+      backgroundColor: scaffold,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
     ),

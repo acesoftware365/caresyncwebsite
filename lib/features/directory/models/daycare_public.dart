@@ -10,6 +10,7 @@ class DaycarePublic {
     required this.city,
     required this.state,
     required this.addressLine,
+    required this.zip,
     required this.email,
     required this.phone,
     required this.licenseNumber,
@@ -28,6 +29,7 @@ class DaycarePublic {
   final String city;
   final String state;
   final String addressLine;
+  final String zip;
 
   final String email;
   final String phone;
@@ -79,6 +81,7 @@ class DaycarePublic {
       city: city,
       state: state,
       addressLine: addressLine,
+      zip: zip,
       email: ((d['businessEmail'] ?? d['email']) ?? '').toString(),
       phone: phone,
       licenseNumber: (d['licenseNumber'] ?? '').toString(),

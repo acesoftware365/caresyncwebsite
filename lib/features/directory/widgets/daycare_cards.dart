@@ -15,39 +15,124 @@ class DaycareCard extends StatelessWidget {
       onTap: onTap,
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Logo(url: item.logoUrl),
-              const SizedBox(width: 12),
+              _ResultThumb(
+                heroUrl: item.heroUrl,
+                logoUrl: item.logoUrl,
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.name, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
                     Text(
-                      '${item.city}${item.city.isNotEmpty && item.state.isNotEmpty ? ', ' : ''}${item.state}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      item.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant
+                              .withAlpha(200),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${item.city}${item.city.isNotEmpty && item.state.isNotEmpty ? ', ' : ''}${item.state}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (item.capacity > 0) _Chip(text: 'Capacity: ${item.capacity}'),
-                        if (item.licenseNumber.trim().isNotEmpty) _Chip(text: 'License: ${item.licenseNumber}'),
-                        if (item.languages.isNotEmpty) _Chip(text: item.languages.take(2).join(' • ')),
+                        if (item.capacity > 0) _Chip(text: 'Capacity ${item.capacity}'),
+                        if (item.licenseNumber.trim().isNotEmpty)
+                          _Chip(text: 'License ${item.licenseNumber}'),
+                        if (item.languages.isNotEmpty)
+                          _Chip(text: item.languages.take(2).join(' • ')),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right),
+              const SizedBox(width: 10),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withAlpha(28),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary.withAlpha(220),
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ResultThumb extends StatelessWidget {
+  const _ResultThumb({
+    required this.heroUrl,
+    required this.logoUrl,
+  });
+
+  final String heroUrl;
+  final String logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = heroUrl.trim().isNotEmpty ? heroUrl : logoUrl;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 86,
+        height: 86,
+        child: image.isEmpty
+            ? Container(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: const Icon(Icons.school_rounded),
+              )
+            : SmartNetworkImage(
+                urls: candidateImageUrls(image),
+                fit: BoxFit.cover,
+                placeholder: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Center(
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+                fallback: Container(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Icon(Icons.broken_image_outlined),
+                ),
+              ),
       ),
     );
   }
@@ -140,38 +225,6 @@ class StateTile extends StatelessWidget {
   }
 }
 
-class _Logo extends StatelessWidget {
-  const _Logo({required this.url});
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: url.isEmpty
-            ? Container(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: const Icon(Icons.school_rounded),
-              )
-            : SmartNetworkImage(
-                urls: candidateImageUrls(url),
-                fit: BoxFit.cover,
-                placeholder: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Center(child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))),
-                ),
-                fallback: Container(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Icon(Icons.school_rounded),
-                ),
-              ),
-      ),
-    );
-  }
-}
-
 class _Chip extends StatelessWidget {
   const _Chip({required this.text});
   final String text;
@@ -182,10 +235,15 @@ class _Chip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.black.withAlpha(20)),
-        color: Colors.white,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        color: Theme.of(context).colorScheme.surface,
       ),
-      child: Text(text, style: const TextStyle(fontSize: 12)),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+      ),
     );
   }
 }
