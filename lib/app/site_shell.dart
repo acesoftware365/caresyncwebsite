@@ -131,7 +131,7 @@ class _SiteFooter extends StatelessWidget {
           runSpacing: 4,
           children: [
             Text('Powered by Liisgo Daycare System', style: textTheme.bodySmall),
-            Text('Version 1.0.2', style: textTheme.bodySmall),
+            Text('Version 1.0.6', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -193,7 +193,7 @@ class _SiteFooter extends StatelessWidget {
               style: textTheme.bodySmall,
             ),
             Text(
-              'Version 1.0.2',
+              'Version 1.0.6',
               style: textTheme.bodySmall,
             ),
           ],

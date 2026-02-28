@@ -186,11 +186,6 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
             final showPhone = _boolFromDoc(d, 'websiteShowPhone', fallback: true);
             final showOwner = _boolFromDoc(d, 'websiteShowOwner', fallback: true);
             final showHours = _boolFromDoc(d, 'websiteShowHours', fallback: true);
-            final showAvailability = _boolFromDoc(
-              d,
-              'websiteShowAvailability',
-              fallback: true,
-            );
             final showPrograms = _boolFromDoc(
               d,
               'websiteShowPrograms',
@@ -248,8 +243,6 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       city: city,
                       state: state,
                       zip: zip,
-                      providerType: providerType,
-                      capacity: capacity,
                       palette: palette,
                     ),
                       const SizedBox(height: 14),
@@ -298,12 +291,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                             showPhone: showPhone,
                             showOwner: showOwner,
                             showHours: showHours,
-                            showAvailability: showAvailability,
                             hours: hours,
                             availability: availability,
                             providerType: providerType,
                             license: license,
-                            ageLabel: _ageLabel(d),
+                            ageLabel: _ageLabel(d, availability: availability),
+                            establishedAt: _establishedFromDoc(d),
                             palette: palette,
                           );
 
@@ -540,12 +533,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     required bool showPhone,
     required bool showOwner,
     required bool showHours,
-    required bool showAvailability,
     required String hours,
     required String availability,
     required String providerType,
     required String license,
     required String ageLabel,
+    required String establishedAt,
     required _WebsitePalette palette,
   }) {
     final addressHref = address.isEmpty
@@ -571,6 +564,7 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     final tikTokHref = _toWebUrlOrEmpty(tikTokUrl);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Card(
           color: palette.thirty.withAlpha(90),
@@ -662,19 +656,18 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                 const Divider(height: 22),
                 if (showHours)
                   _MiniDetail(
-                    title: 'Hours & Availability',
+                    title: 'Hours',
                     value: hours.isEmpty
                         ? 'Please contact for current schedule.'
                         : hours,
                   ),
-                if (showAvailability)
-                  _MiniDetail(
-                    title: 'Availability',
-                    value: availability.isEmpty ? 'N/A' : availability,
-                  ),
                 _MiniDetail(
                   title: 'Ages',
                   value: ageLabel.isEmpty ? 'N/A' : ageLabel,
+                ),
+                _MiniDetail(
+                  title: 'Established',
+                  value: establishedAt.isEmpty ? 'N/A' : establishedAt,
                 ),
                 _MiniDetail(
                   title: 'Provider Type',
@@ -824,8 +817,8 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       icon: const Icon(Icons.send_outlined),
                       label: const Text('Request Information'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2F6A8B),
-                        foregroundColor: Colors.white,
+                        backgroundColor: palette.accent.withAlpha(230),
+                        foregroundColor: _bestContrastingText(palette.accent),
                       ),
                     ),
                   ),
@@ -1038,8 +1031,8 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
     final childBirthday = _contactChildBirthdayCtrl.text.trim();
     final message = _contactMessageCtrl.text.trim();
     final adminEmail = await _fetchRequestInfoAdminEmail();
-    final parentEmailForSubject = senderEmail.isEmpty
-        ? 'no-parent-email'
+    final familyEmailForSubject = senderEmail.isEmpty
+        ? 'no-family-email'
         : senderEmail;
 
     final body =
@@ -1048,9 +1041,9 @@ Hi $daycareName,
 
 $message
 
-Tenant:
+Daycare:
 - Name: $daycareName
-- ID: $tenantId
+- Daycare ID: $tenantId
 
 Family Details:
 - Name: $senderName
@@ -1068,7 +1061,7 @@ $senderName
       to: targetEmail,
       cc: adminEmail,
       subject:
-          'Request information - $daycareName - Parent $parentEmailForSubject',
+          'Request Information - Daycare: $daycareName - Family Email: $familyEmailForSubject',
       body: body,
     );
   }
@@ -1180,8 +1173,6 @@ class _TopHeader extends StatelessWidget {
     required this.city,
     required this.state,
     required this.zip,
-    required this.providerType,
-    required this.capacity,
     required this.palette,
   });
 
@@ -1189,8 +1180,6 @@ class _TopHeader extends StatelessWidget {
   final String city;
   final String state;
   final String zip;
-  final String providerType;
-  final String capacity;
   final _WebsitePalette palette;
 
   @override
@@ -1238,16 +1227,6 @@ class _TopHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Text(location, style: Theme.of(context).textTheme.bodyMedium),
             ],
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (providerType.isNotEmpty)
-                  _Tag(label: providerType, palette: palette),
-                if (capacity.isNotEmpty) _Tag(label: capacity, palette: palette),
-              ],
-            ),
           ],
         ),
       ),
@@ -1306,7 +1285,7 @@ class _HeroGallery extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                flex: 2,
+                flex: 7,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: InkWell(
@@ -1323,15 +1302,16 @@ class _HeroGallery extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 14),
               Expanded(
+                flex: 4,
                 child: GridView.builder(
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: sidePhotos.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
                     childAspectRatio: 1,
                   ),
                   itemBuilder: (context, i) {
@@ -1444,6 +1424,7 @@ class _FactsGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final cols = c.maxWidth > 620 ? 2 : 1;
+        final itemAspectRatio = cols == 1 ? 5.2 : 3.2;
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -1452,7 +1433,7 @@ class _FactsGrid extends StatelessWidget {
             crossAxisCount: cols,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 3.2,
+            childAspectRatio: itemAspectRatio,
           ),
           itemBuilder: (context, i) {
             final fact = facts[i];
@@ -1733,8 +1714,8 @@ List<String> _sanitizeList(List<String> raw) {
 String _hoursFromDoc(Map<String, dynamic> d) {
   final startDay = (d['hoursStartDay'] ?? '').toString().trim();
   final endDay = (d['hoursEndDay'] ?? '').toString().trim();
-  final opening = (d['hoursOpeningHour'] ?? '').toString().trim();
-  final closing = (d['hoursClosingHour'] ?? '').toString().trim();
+  final opening = _formatHourToAmPm((d['hoursOpeningHour'] ?? '').toString().trim());
+  final closing = _formatHourToAmPm((d['hoursClosingHour'] ?? '').toString().trim());
   final hasRange = startDay.isNotEmpty ||
       endDay.isNotEmpty ||
       opening.isNotEmpty ||
@@ -1747,6 +1728,25 @@ String _hoursFromDoc(Map<String, dynamic> d) {
   final operating = (d['operatingHours'] ?? '').toString().trim();
   if (operating.isNotEmpty) return operating;
   return (d['hours'] ?? '').toString().trim();
+}
+
+String _formatHourToAmPm(String value) {
+  final v = value.trim();
+  if (v.isEmpty) return '';
+
+  final match = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(v);
+  if (match == null) return v;
+
+  final hour = int.tryParse(match.group(1)!);
+  final minute = int.tryParse(match.group(2)!);
+  if (hour == null || minute == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return v;
+  }
+
+  final suffix = hour >= 12 ? 'PM' : 'AM';
+  final hour12 = (hour % 12 == 0) ? 12 : (hour % 12);
+  final mm = minute.toString().padLeft(2, '0');
+  return '$hour12:$mm $suffix';
 }
 
 String _ownerMessageText({
@@ -1781,7 +1781,10 @@ String _capacityLabel(dynamic raw) {
   return 'Capacity $value';
 }
 
-String _ageLabel(Map<String, dynamic> d) {
+String _ageLabel(Map<String, dynamic> d, {String availability = ''}) {
+  final availabilityValue = availability.trim();
+  if (availabilityValue.isNotEmpty) return availabilityValue;
+
   final direct = (d['ageRange'] ?? '').toString().trim();
   if (direct.isNotEmpty) return direct;
 
@@ -1791,6 +1794,16 @@ String _ageLabel(Map<String, dynamic> d) {
     return '$min - $max'.trim();
   }
   return '';
+}
+
+String _establishedFromDoc(Map<String, dynamic> d) {
+  final primary = (d['establishedAt'] ?? '').toString().trim();
+  if (primary.isNotEmpty) return primary;
+
+  final fallback = (d['established'] ?? d['establishedDate'] ?? '')
+      .toString()
+      .trim();
+  return fallback;
 }
 
 Widget _imageLoading(BuildContext context) {
@@ -1811,6 +1824,10 @@ Widget _imageFallback(BuildContext context, {required IconData icon}) {
     alignment: Alignment.center,
     child: Icon(icon),
   );
+}
+
+Color _bestContrastingText(Color background) {
+  return background.computeLuminance() > 0.55 ? Colors.black : Colors.white;
 }
 
 class _WebsitePalette {
