@@ -652,7 +652,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final height = widget.large ? 340.0 : 270.0;
+    final height = widget.large ? 340.0 : 240.0;
     return Column(
       children: [
         MouseRegion(
