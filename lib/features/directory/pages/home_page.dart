@@ -547,20 +547,6 @@ class _PromoSection extends StatelessWidget {
       children: [
         Text('Highlights', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 10),
-        if (small.isNotEmpty) ...[
-          Text(
-            'Highlights',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 8),
-          _PromoSmallGrid(
-            promos: small,
-            onOpenUrl: onOpenUrl,
-          ),
-          const SizedBox(height: 12),
-        ],
         if (large.isNotEmpty) ...[
           Text(
             'Large Carousel',
@@ -573,6 +559,20 @@ class _PromoSection extends StatelessWidget {
             promos: large,
             rotationSeconds: rotationSeconds,
             large: true,
+            onOpenUrl: onOpenUrl,
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (small.isNotEmpty) ...[
+          Text(
+            'Highlights',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          _PromoSmallGrid(
+            promos: small,
             onOpenUrl: onOpenUrl,
           ),
         ],
