@@ -256,12 +256,11 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       zip: zip,
                       palette: palette,
                       showShareButton: showShareButton,
-                      onShareWebsite: () async {
-                        await Clipboard.setData(
-                          ClipboardData(text: daycarePublicUrl),
-                        );
-                        _showNotice('Website URL copied: $daycarePublicUrl');
-                      },
+                      onShareWebsite: () => _openShareOptionsSheet(
+                        context,
+                        url: daycarePublicUrl,
+                        title: name,
+                      ),
                     ),
                       const SizedBox(height: 14),
                       _HeroGallery(
@@ -1176,6 +1175,83 @@ $senderName
   void _showNotice(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _openShareOptionsSheet(
+    BuildContext context, {
+    required String url,
+    required String title,
+  }) async {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
+    final text = Uri.encodeComponent('Check this daycare: $cleanUrl');
+    final smsBody = Uri.encodeComponent('Check this daycare: $cleanUrl');
+    final emailSubject = Uri.encodeComponent('Daycare shared with you');
+    final emailBody = Uri.encodeComponent('Take a look at this daycare:\n$cleanUrl');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: Text('Share $title'),
+                subtitle: const Text('Choose where to share this link'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_outlined),
+                title: const Text('WhatsApp'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _launchWithFallback(
+                    Uri.parse('https://wa.me/?text=$text'),
+                    fallbackText: cleanUrl,
+                    errorMessage: 'Could not open WhatsApp. Link copied instead.',
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sms_outlined),
+                title: const Text('Text Message'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _launchWithFallback(
+                    Uri.parse('sms:?body=$smsBody'),
+                    fallbackText: cleanUrl,
+                    errorMessage: 'Could not open text app. Link copied instead.',
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.email_outlined),
+                title: const Text('Email'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _launchWithFallback(
+                    Uri.parse('mailto:?subject=$emailSubject&body=$emailBody'),
+                    fallbackText: cleanUrl,
+                    errorMessage: 'Could not open email. Link copied instead.',
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Copy Link'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await Clipboard.setData(ClipboardData(text: cleanUrl));
+                  _showNotice('Link copied: $cleanUrl');
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

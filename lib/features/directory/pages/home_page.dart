@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -96,27 +97,100 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                     ),
                     border: Border.all(color: palette.thirty.withAlpha(170)),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(210),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.family_restroom_outlined),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Discover trusted daycare programs near you.',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      final compact = c.maxWidth < 760;
+                      if (compact) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withAlpha(210),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.family_restroom_outlined),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Discover trusted daycare programs near you.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.tonalIcon(
+                                onPressed: () => _openShareOptionsSheet(
+                                  context,
+                                  url: 'https://daycarefinder.web.app',
+                                  title: 'DaycareFinder',
+                                ),
+                                icon: const Icon(Icons.link_rounded, size: 18),
+                                label: const Text('Share Home'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.white.withAlpha(210),
+                                  foregroundColor: palette.accent,
+                                  side: BorderSide(
+                                    color: palette.accent.withAlpha(90),
+                                  ),
+                                ),
                               ),
-                        ),
-                      ),
-                    ],
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(210),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.family_restroom_outlined),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Discover trusted daycare programs near you.',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton.tonalIcon(
+                            onPressed: () => _openShareOptionsSheet(
+                              context,
+                              url: 'https://daycarefinder.web.app',
+                              title: 'DaycareFinder',
+                            ),
+                            icon: const Icon(Icons.link_rounded, size: 18),
+                            label: const Text('Share Home'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white.withAlpha(210),
+                              foregroundColor: palette.accent,
+                              side: BorderSide(
+                                color: palette.accent.withAlpha(90),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 _Hero(
@@ -235,6 +309,87 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     final uri = Uri.tryParse(normalized);
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.platformDefault);
+  }
+
+  Future<void> _openShareOptionsSheet(
+    BuildContext context, {
+    required String url,
+    required String title,
+  }) async {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
+    final text = Uri.encodeComponent('Check this out: $cleanUrl');
+    final smsBody = Uri.encodeComponent('Check this out: $cleanUrl');
+    final emailSubject = Uri.encodeComponent('Shared from DaycareFinder');
+    final emailBody = Uri.encodeComponent('Take a look:\n$cleanUrl');
+
+    Future<void> launchOrCopy(Uri uri) async {
+      final ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!ok) {
+        await Clipboard.setData(ClipboardData(text: cleanUrl));
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          this.context,
+        ).showSnackBar(SnackBar(content: Text('Link copied: $cleanUrl')));
+      }
+    }
+
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: Text('Share $title'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_outlined),
+                title: const Text('WhatsApp'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await launchOrCopy(Uri.parse('https://wa.me/?text=$text'));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sms_outlined),
+                title: const Text('Text Message'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await launchOrCopy(Uri.parse('sms:?body=$smsBody'));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.email_outlined),
+                title: const Text('Email'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await launchOrCopy(
+                    Uri.parse('mailto:?subject=$emailSubject&body=$emailBody'),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Copy Link'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await Clipboard.setData(ClipboardData(text: cleanUrl));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(
+                    this.context,
+                  ).showSnackBar(SnackBar(content: Text('Link copied: $cleanUrl')));
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
