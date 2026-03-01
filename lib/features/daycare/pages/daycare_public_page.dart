@@ -216,9 +216,20 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
               'websiteShowParentReviews',
               fallback: true,
             );
+            final showShareButton = _boolFromDoc(
+              d,
+              'websiteShowShareButton',
+              fallback: true,
+            );
             final instagramUrl = (d['websiteInstagramUrl'] ?? '').toString().trim();
             final tikTokUrl = (d['websiteTikTokUrl'] ?? '').toString().trim();
             final websiteUrl = _pickWebsite(d);
+            final daycareSlugRaw = (d['websiteSlug'] ?? d['slug'] ?? widget.slug)
+                .toString()
+                .trim();
+            final daycarePublicUrl = daycareSlugRaw.isEmpty
+                ? 'https://daycarefinder.web.app'
+                : 'https://daycarefinder.web.app/#/daycare/${Uri.encodeComponent(daycareSlugRaw)}';
             final ownerMessage = _ownerMessageText(
               raw: (d['websiteOwnerMessage'] ?? '').toString().trim(),
               ownerName: ownerName,
@@ -244,6 +255,13 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       state: state,
                       zip: zip,
                       palette: palette,
+                      showShareButton: showShareButton,
+                      onShareWebsite: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: daycarePublicUrl),
+                        );
+                        _showNotice('Website URL copied: $daycarePublicUrl');
+                      },
                     ),
                       const SizedBox(height: 14),
                       _HeroGallery(
@@ -1174,6 +1192,8 @@ class _TopHeader extends StatelessWidget {
     required this.state,
     required this.zip,
     required this.palette,
+    required this.showShareButton,
+    required this.onShareWebsite,
   });
 
   final String name;
@@ -1181,6 +1201,8 @@ class _TopHeader extends StatelessWidget {
   final String state;
   final String zip;
   final _WebsitePalette palette;
+  final bool showShareButton;
+  final VoidCallback onShareWebsite;
 
   @override
   Widget build(BuildContext context) {
@@ -1196,31 +1218,51 @@ class _TopHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        name,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.thirty.withAlpha(120),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Verified',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                if (showShareButton) ...[
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: onShareWebsite,
+                    icon: const Icon(Icons.link_rounded, size: 18),
+                    label: const Text('Share Website'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: palette.thirty.withAlpha(120),
+                      foregroundColor: palette.accent,
+                      side: BorderSide(color: palette.accent.withAlpha(95)),
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: palette.thirty.withAlpha(120),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Text(
-                    'Verified',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
+                ],
               ],
             ),
             if (location.isNotEmpty) ...[
