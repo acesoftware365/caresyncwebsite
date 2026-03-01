@@ -985,6 +985,26 @@ const Map<String, _FinderPalette> _finderPalettes = {
     thirty: Color(0xFFCBD5E1),
     accent: Color(0xFF334155),
   ),
+  'american_flag': _FinderPalette(
+    sixty: Color(0xFFF5F8FF),
+    thirty: Color(0xFFE3EAFB),
+    accent: Color(0xFFB22234),
+  ),
+  'christmas': _FinderPalette(
+    sixty: Color(0xFFF4FBF5),
+    thirty: Color(0xFFD4EED6),
+    accent: Color(0xFFC62828),
+  ),
+  'saint_valentine': _FinderPalette(
+    sixty: Color(0xFFFFF1F6),
+    thirty: Color(0xFFFBCADD),
+    accent: Color(0xFFE11D48),
+  ),
+  'saint_patrick': _FinderPalette(
+    sixty: Color(0xFFF2FAF3),
+    thirty: Color(0xFFCBECCF),
+    accent: Color(0xFF0F8A3B),
+  ),
 };
 
 Color _bestTextOn(Color color) {

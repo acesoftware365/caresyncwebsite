@@ -96,4 +96,20 @@ const Map<String, _ThemePalette> _themePalettes = {
     seed: Color(0xFF334155),
     scaffold: Color(0xFFF7FAFC),
   ),
+  'american_flag': _ThemePalette(
+    seed: Color(0xFFB22234),
+    scaffold: Color(0xFFF7F9FF),
+  ),
+  'christmas': _ThemePalette(
+    seed: Color(0xFFC62828),
+    scaffold: Color(0xFFF5FBF6),
+  ),
+  'saint_valentine': _ThemePalette(
+    seed: Color(0xFFE11D48),
+    scaffold: Color(0xFFFFF5F8),
+  ),
+  'saint_patrick': _ThemePalette(
+    seed: Color(0xFF0F8A3B),
+    scaffold: Color(0xFFF3FCF5),
+  ),
 };

@@ -147,7 +147,7 @@ class _SiteFooter extends StatelessWidget {
           runSpacing: 4,
           children: [
             Text('Powered by Liisgo Daycare System', style: textTheme.bodySmall),
-            Text('Version 1.0.22', style: textTheme.bodySmall),
+            Text('Version 1.0.23', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -209,7 +209,7 @@ class _SiteFooter extends StatelessWidget {
               style: textTheme.bodySmall,
             ),
             Text(
-              'Version 1.0.22',
+              'Version 1.0.23',
               style: textTheme.bodySmall,
             ),
           ],
@@ -257,6 +257,22 @@ const Map<String, _ShellPalette> _shellPalettes = {
   'slate': _ShellPalette(
     sixty: Color(0xFFF1F5F9),
     thirty: Color(0xFFCBD5E1),
+  ),
+  'american_flag': _ShellPalette(
+    sixty: Color(0xFFF5F8FF),
+    thirty: Color(0xFFE3EAFB),
+  ),
+  'christmas': _ShellPalette(
+    sixty: Color(0xFFF4FBF5),
+    thirty: Color(0xFFD4EED6),
+  ),
+  'saint_valentine': _ShellPalette(
+    sixty: Color(0xFFFFF1F6),
+    thirty: Color(0xFFFBCADD),
+  ),
+  'saint_patrick': _ShellPalette(
+    sixty: Color(0xFFF2FAF3),
+    thirty: Color(0xFFCBECCF),
   ),
 };
 
