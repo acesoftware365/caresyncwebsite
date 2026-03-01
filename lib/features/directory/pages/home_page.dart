@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 
 import '../../../services/location_text.dart';
+import '../../../services/analytics/analytics_event_logger.dart';
 import '../constants/search_options.dart';
 import '../models/daycare_public.dart';
 import '../services/daycare_directory_service.dart';
@@ -31,6 +32,12 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
   void initState() {
     super.initState();
     svc = DaycareDirectoryService(FirebaseFirestore.instance);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsEventLogger.log(
+        eventType: 'page_view_home',
+        pageType: 'home',
+      );
+    });
   }
 
   @override
@@ -59,6 +66,17 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     if (z.isNotEmpty) qp['zip'] = z;
     final l = (language ?? quickLanguage).trim();
     if (l.isNotEmpty) qp['language'] = l;
+    AnalyticsEventLogger.log(
+      eventType: 'click_home_search',
+      pageType: 'home',
+      data: {
+        'name': n,
+        'state': st,
+        'city': c,
+        'zip': z,
+        'language': l,
+      },
+    );
     context.go(Uri(path: '/search', queryParameters: qp).toString());
   }
 
@@ -131,11 +149,17 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                             Align(
                               alignment: Alignment.centerRight,
                               child: FilledButton.tonalIcon(
-                                onPressed: () => _openShareOptionsSheet(
-                                  context,
-                                  url: 'https://daycarefinder.web.app',
-                                  title: 'DaycareFinder',
-                                ),
+                                onPressed: () {
+                                  AnalyticsEventLogger.log(
+                                    eventType: 'click_share_home_button',
+                                    pageType: 'home',
+                                  );
+                                  _openShareOptionsSheet(
+                                    context,
+                                    url: 'https://daycarefinder.web.app',
+                                    title: 'DaycareFinder',
+                                  );
+                                },
                                 icon: const Icon(Icons.link_rounded, size: 18),
                                 label: const Text('Share Home'),
                                 style: FilledButton.styleFrom(
@@ -173,11 +197,17 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                           ),
                           const SizedBox(width: 12),
                           FilledButton.tonalIcon(
-                            onPressed: () => _openShareOptionsSheet(
-                              context,
-                              url: 'https://daycarefinder.web.app',
-                              title: 'DaycareFinder',
-                            ),
+                            onPressed: () {
+                              AnalyticsEventLogger.log(
+                                eventType: 'click_share_home_button',
+                                pageType: 'home',
+                              );
+                              _openShareOptionsSheet(
+                                context,
+                                url: 'https://daycarefinder.web.app',
+                                title: 'DaycareFinder',
+                              );
+                            },
                             icon: const Icon(Icons.link_rounded, size: 18),
                             label: const Text('Share Home'),
                             style: FilledButton.styleFrom(
@@ -258,7 +288,16 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                             final x = items[i];
                             return FeaturedTile(
                               item: x,
-                              onTap: () => context.go('/daycare/${x.effectiveSlug}'),
+                              onTap: () {
+                                AnalyticsEventLogger.log(
+                                  eventType: 'click_featured_daycare',
+                                  pageType: 'home',
+                                  tenantId: x.tenantId,
+                                  slug: x.effectiveSlug,
+                                  data: {'name': x.name},
+                                );
+                                context.go('/daycare/${x.effectiveSlug}');
+                              },
                             );
                           },
                         );
@@ -351,6 +390,11 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                 title: const Text('WhatsApp'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_home_whatsapp',
+                    pageType: 'home',
+                    data: {'url': cleanUrl},
+                  );
                   await launchOrCopy(Uri.parse('https://wa.me/?text=$text'));
                 },
               ),
@@ -359,6 +403,11 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                 title: const Text('Text Message'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_home_sms',
+                    pageType: 'home',
+                    data: {'url': cleanUrl},
+                  );
                   await launchOrCopy(Uri.parse('sms:?body=$smsBody'));
                 },
               ),
@@ -367,6 +416,11 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                 title: const Text('Email'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_home_email',
+                    pageType: 'home',
+                    data: {'url': cleanUrl},
+                  );
                   await launchOrCopy(
                     Uri.parse('mailto:?subject=$emailSubject&body=$emailBody'),
                   );
@@ -377,6 +431,11 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                 title: const Text('Copy Link'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_home_copy',
+                    pageType: 'home',
+                    data: {'url': cleanUrl},
+                  );
                   await Clipboard.setData(ClipboardData(text: cleanUrl));
                   if (!mounted) return;
                   ScaffoldMessenger.of(

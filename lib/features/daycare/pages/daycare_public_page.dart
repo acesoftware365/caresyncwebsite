@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../services/image_url.dart';
 import '../../../services/location_text.dart';
+import '../../../services/analytics/analytics_event_logger.dart';
 import '../../../services/web_link_opener.dart';
 import '../../../widgets/smart_network_image.dart';
 
@@ -19,6 +20,7 @@ class DaycarePublicPage extends StatefulWidget {
 
 class _DaycarePublicPageState extends State<DaycarePublicPage> {
   Future<String?>? tenantIdFuture;
+  String? _lastTrackedTenantId;
 
   final _contactFormKey = GlobalKey<FormState>();
   final _contactNameCtrl = TextEditingController();
@@ -236,6 +238,20 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
               businessName: name,
               showOwner: showOwner,
             );
+            if (_lastTrackedTenantId != tenantId) {
+              _lastTrackedTenantId = tenantId;
+              AnalyticsEventLogger.log(
+                eventType: 'page_view_daycare',
+                pageType: 'tenant',
+                tenantId: tenantId,
+                slug: widget.slug,
+                data: {
+                  'name': name,
+                  'city': city,
+                  'state': state,
+                },
+              );
+            }
 
             return Center(
               child: ConstrainedBox(
@@ -256,11 +272,19 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       zip: zip,
                       palette: palette,
                       showShareButton: showShareButton,
-                      onShareWebsite: () => _openShareOptionsSheet(
-                        context,
-                        url: daycarePublicUrl,
-                        title: name,
-                      ),
+                      onShareWebsite: () {
+                        AnalyticsEventLogger.log(
+                          eventType: 'click_share_daycare_button',
+                          pageType: 'tenant',
+                          tenantId: tenantId,
+                          slug: widget.slug,
+                        );
+                        _openShareOptionsSheet(
+                          context,
+                          url: daycarePublicUrl,
+                          title: name,
+                        );
+                      },
                     ),
                       const SizedBox(height: 14),
                       _HeroGallery(
@@ -849,6 +873,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
   }
 
   Future<void> _openAddress(String address) async {
+    AnalyticsEventLogger.log(
+      eventType: 'click_open_address',
+      pageType: 'tenant',
+      slug: widget.slug,
+      data: {'address': address},
+    );
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
     );
@@ -860,6 +890,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
   }
 
   Future<void> _openPhone(String phone) async {
+    AnalyticsEventLogger.log(
+      eventType: 'click_open_phone',
+      pageType: 'tenant',
+      slug: widget.slug,
+      data: {'phone': phone},
+    );
     final digits = phone.replaceAll(RegExp(r'[^\d+]'), '');
     if (digits.isEmpty) return;
     final uri = Uri(scheme: 'tel', path: digits);
@@ -871,6 +907,12 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
   }
 
   Future<void> _openWebsite(String website) async {
+    AnalyticsEventLogger.log(
+      eventType: 'click_open_website',
+      pageType: 'tenant',
+      slug: widget.slug,
+      data: {'website': website},
+    );
     final value = website.trim();
     if (value.isEmpty) return;
     final uri = Uri.tryParse(
@@ -1206,6 +1248,12 @@ $senderName
                 title: const Text('WhatsApp'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_daycare_whatsapp',
+                    pageType: 'tenant',
+                    slug: widget.slug,
+                    data: {'url': cleanUrl},
+                  );
                   await _launchWithFallback(
                     Uri.parse('https://wa.me/?text=$text'),
                     fallbackText: cleanUrl,
@@ -1218,6 +1266,12 @@ $senderName
                 title: const Text('Text Message'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_daycare_sms',
+                    pageType: 'tenant',
+                    slug: widget.slug,
+                    data: {'url': cleanUrl},
+                  );
                   await _launchWithFallback(
                     Uri.parse('sms:?body=$smsBody'),
                     fallbackText: cleanUrl,
@@ -1230,6 +1284,12 @@ $senderName
                 title: const Text('Email'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_daycare_email',
+                    pageType: 'tenant',
+                    slug: widget.slug,
+                    data: {'url': cleanUrl},
+                  );
                   await _launchWithFallback(
                     Uri.parse('mailto:?subject=$emailSubject&body=$emailBody'),
                     fallbackText: cleanUrl,
@@ -1242,6 +1302,12 @@ $senderName
                 title: const Text('Copy Link'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
+                  AnalyticsEventLogger.log(
+                    eventType: 'share_daycare_copy',
+                    pageType: 'tenant',
+                    slug: widget.slug,
+                    data: {'url': cleanUrl},
+                  );
                   await Clipboard.setData(ClipboardData(text: cleanUrl));
                   _showNotice('Link copied: $cleanUrl');
                 },

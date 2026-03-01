@@ -66,6 +66,12 @@ service cloud.firestore {
       }
     }
 
+    match /analytics_events/{docId} {
+      allow create: if true;
+      allow read: if isOwner();
+      allow update, delete: if false;
+    }
+
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
