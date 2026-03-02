@@ -7,6 +7,8 @@ import 'dart:async';
 
 import '../../../services/location_text.dart';
 import '../../../services/analytics/analytics_event_logger.dart';
+import '../../../services/location_lookup.dart';
+import '../../../services/location_prefs.dart';
 import '../constants/search_options.dart';
 import '../models/daycare_public.dart';
 import '../services/daycare_directory_service.dart';
@@ -27,6 +29,13 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
   final quickZip = TextEditingController();
   String quickLanguage = '';
   String quickState = '';
+  bool filtersExpanded = false;
+  bool showInlineResults = false;
+  bool preferNearbyFeatured = false;
+  bool locating = false;
+  String locationHintMessage = '';
+  Future<List<DaycarePublic>>? inlineResultsFuture;
+  String inlineResultsTitle = 'All Daycares';
 
   @override
   void initState() {
@@ -38,6 +47,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
         pageType: 'home',
       );
     });
+    _restoreSavedLocation();
   }
 
   @override
@@ -55,17 +65,18 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     String? zip,
     String? language,
   }) {
-    final qp = <String, String>{};
     final n = (name ?? quickName.text).trim();
-    if (n.isNotEmpty) qp['name'] = n;
     final st = normalizeStateCode(state ?? quickState);
-    if (st.isNotEmpty) qp['state'] = st;
     final c = normalizeCity(city ?? quickCity.text);
-    if (c.isNotEmpty) qp['city'] = c;
     final z = (zip ?? quickZip.text).trim();
-    if (z.isNotEmpty) qp['zip'] = z;
     final l = (language ?? quickLanguage).trim();
-    if (l.isNotEmpty) qp['language'] = l;
+    final filters = DaycareSearchFilters(
+      name: n,
+      state: st,
+      city: c,
+      zip: z,
+      language: l,
+    );
     AnalyticsEventLogger.log(
       eventType: 'click_home_search',
       pageType: 'home',
@@ -77,7 +88,163 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
         'language': l,
       },
     );
-    context.go(Uri(path: '/search', queryParameters: qp).toString());
+    setState(() {
+      inlineResultsTitle = 'All Daycares';
+      showInlineResults = true;
+      preferNearbyFeatured = false;
+      inlineResultsFuture = svc
+          .search(filters)
+          .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+    });
+  }
+
+  void _toggleSearchPanel() {
+    setState(() {
+      filtersExpanded = !filtersExpanded;
+      if (filtersExpanded) {
+        showInlineResults = true;
+        preferNearbyFeatured = false;
+        inlineResultsTitle = 'All Daycares';
+        inlineResultsFuture = svc
+            .search(
+              DaycareSearchFilters(
+                name: quickName.text.trim(),
+                state: quickState,
+                city: quickCity.text.trim(),
+                zip: quickZip.text.trim(),
+                language: quickLanguage,
+              ),
+            )
+            .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+      }
+    });
+  }
+
+  int _featuredScore(DaycarePublic item) {
+    var score = 0;
+    switch (item.featurePlan) {
+      case 'premium':
+        score += 80;
+        break;
+      case 'plus':
+        score += 40;
+        break;
+      default:
+        break;
+    }
+    if (item.featureDaycare) score += 30;
+    if (item.isVerified) score += 20;
+    if (item.heroUrl.trim().isNotEmpty) score += 8;
+    if (item.description.trim().isNotEmpty) score += 4;
+    if (item.languages.isNotEmpty) score += 3;
+    if (item.capacity > 0) score += 2;
+    return score;
+  }
+
+  List<DaycarePublic> _rankNearbyFeatured(List<DaycarePublic> items) {
+    final eligible = items.where((x) => x.isFeatureEligible).toList();
+    eligible.sort((a, b) {
+      final byScore = _featuredScore(b).compareTo(_featuredScore(a));
+      if (byScore != 0) return byScore;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return eligible;
+  }
+
+  Future<void> _useMyLocation() async {
+    if (locating) return;
+    setState(() {
+      locating = true;
+      locationHintMessage = '';
+    });
+
+    try {
+      final result = await detectCurrentLocation();
+      final stateCode = normalizeStateCode(result.state);
+      final city = normalizeCity(result.city);
+      final zip = result.zip.trim();
+
+      setState(() {
+        if (city.isNotEmpty) quickCity.text = city;
+        if (stateCode.isNotEmpty) quickState = stateCode;
+        if (zip.isNotEmpty) quickZip.text = zip;
+        locationHintMessage = [city, stateCode, zip]
+            .where((e) => e.trim().isNotEmpty)
+            .join(', ');
+      });
+
+      AnalyticsEventLogger.log(
+        eventType: 'use_home_location_success',
+        pageType: 'home',
+        data: {
+          'city': city,
+          'state': stateCode,
+          'zip': zip,
+        },
+      );
+
+      final filters = DaycareSearchFilters(
+        city: city,
+        state: stateCode,
+      );
+      setState(() {
+        filtersExpanded = false;
+        inlineResultsTitle = 'Near You';
+        showInlineResults = true;
+        preferNearbyFeatured = true;
+        inlineResultsFuture = svc
+            .search(filters)
+            .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+      });
+      await saveHomeLocation(
+        SavedHomeLocation(city: city, state: stateCode, zip: zip),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        locationHintMessage =
+            'We could not auto-detect your location. Enter ZIP or city/state.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Location unavailable. Please enter ZIP or city/state.'),
+        ),
+      );
+      AnalyticsEventLogger.log(
+        eventType: 'use_home_location_failed',
+        pageType: 'home',
+        data: {'error': e.toString()},
+      );
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
+
+  Future<void> _restoreSavedLocation() async {
+    final saved = await loadHomeLocation();
+    if (!mounted || saved == null || !saved.hasAny) return;
+
+    final city = normalizeCity(saved.city);
+    final stateCode = normalizeStateCode(saved.state);
+    final zip = saved.zip.trim();
+
+    setState(() {
+      if (city.isNotEmpty) quickCity.text = city;
+      if (stateCode.isNotEmpty) quickState = stateCode;
+      if (zip.isNotEmpty) quickZip.text = zip;
+      locationHintMessage =
+          [city, stateCode, zip].where((e) => e.trim().isNotEmpty).join(', ');
+
+      filtersExpanded = false;
+      inlineResultsTitle = 'Near You';
+      showInlineResults = true;
+      preferNearbyFeatured = true;
+      inlineResultsFuture = svc
+          .search(
+            DaycareSearchFilters(city: city, state: stateCode),
+          )
+          .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+    });
   }
 
   @override
@@ -232,7 +399,12 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                   onLanguageChanged: (v) => setState(() => quickLanguage = v),
                   state2: quickState,
                   onStateChanged: (v) => setState(() => quickState = v),
-                  onSearch: () => _goSearch(),
+                  onToggleFilters: _toggleSearchPanel,
+                  onSearch: _goSearch,
+                  filtersExpanded: filtersExpanded,
+                  onUseMyLocation: _useMyLocation,
+                  locating: locating,
+                  locationHintMessage: locationHintMessage,
                 ),
                 if (promos.isNotEmpty) ...[
                   const SizedBox(height: 14),
@@ -247,20 +419,46 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                   children: [
                     Text('Featured Daycares', style: Theme.of(context).textTheme.titleLarge),
                     const Spacer(),
-                    TextButton(onPressed: () => context.go('/search'), child: const Text('View all')),
+                    TextButton(
+                      onPressed: () {
+                        if (!filtersExpanded) {
+                          setState(() => filtersExpanded = true);
+                        }
+                        _goSearch();
+                      },
+                      child: const Text('View all'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                StreamBuilder<List<DaycarePublic>>(
-                  stream: svc.watchFeatured(limit: 3),
+                FutureBuilder<List<DaycarePublic>>(
+                  future: (preferNearbyFeatured && inlineResultsFuture != null)
+                      ? inlineResultsFuture
+                      : svc
+                          .featured(limit: 3)
+                          .timeout(const Duration(seconds: 12), onTimeout: () => const []),
                   builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Card(
+                        color: palette.sixty.withAlpha(190),
+                        child: const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'Could not load featured daycares right now.',
+                          ),
+                        ),
+                      );
+                    }
                     if (snap.connectionState == ConnectionState.waiting) {
                       return const Padding(
                         padding: EdgeInsets.all(24),
                         child: Center(child: CircularProgressIndicator()),
                       );
                     }
-                    final items = snap.data ?? [];
+                    final sourceItems = snap.data ?? [];
+                    final items = preferNearbyFeatured
+                        ? _rankNearbyFeatured(sourceItems).take(3).toList()
+                        : sourceItems;
                     if (items.isEmpty) {
                       return Card(
                         color: palette.sixty.withAlpha(190),
@@ -324,6 +522,108 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                     );
                   },
                 ),
+                if (showInlineResults) ...[
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Text(
+                        inlineResultsTitle,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            showInlineResults = false;
+                            preferNearbyFeatured = false;
+                          });
+                        },
+                        child: const Text('Hide'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  FutureBuilder<List<DaycarePublic>>(
+                    future: inlineResultsFuture ??
+                        svc
+                            .search(
+                              DaycareSearchFilters(
+                                name: quickName.text.trim(),
+                                city: quickCity.text.trim(),
+                                state: quickState,
+                                zip: quickZip.text.trim(),
+                                language: quickLanguage,
+                              ),
+                            )
+                            .timeout(
+                              const Duration(seconds: 12),
+                              onTimeout: () => const [],
+                            ),
+                    builder: (context, snap) {
+                      if (snap.hasError) {
+                        return Card(
+                          color: palette.sixty.withAlpha(190),
+                          child: const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text(
+                              'Could not load nearby daycares. Please try again.',
+                            ),
+                          ),
+                        );
+                      }
+                      final items = snap.data ?? const <DaycarePublic>[];
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return Card(
+                          color: palette.sixty.withAlpha(190),
+                          child: const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text('Loading nearby daycares...'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      if (items.isEmpty) {
+                        return Card(
+                          color: palette.sixty.withAlpha(190),
+                          child: const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('No daycares matched this search yet.'),
+                          ),
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${items.length} results',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 10),
+                          ...items.map(
+                            (x) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: DaycareCard(
+                                item: x,
+                                onTap: () => context.go('/daycare/${x.effectiveSlug}'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 22),
                 Card(
                   color: palette.sixty.withAlpha(190),
@@ -481,7 +781,12 @@ class _Hero extends StatelessWidget {
     required this.onLanguageChanged,
     required this.state2,
     required this.onStateChanged,
+    required this.onToggleFilters,
     required this.onSearch,
+    required this.filtersExpanded,
+    required this.onUseMyLocation,
+    required this.locating,
+    required this.locationHintMessage,
   });
 
   final _FinderPalette palette;
@@ -492,31 +797,140 @@ class _Hero extends StatelessWidget {
   final ValueChanged<String> onLanguageChanged;
   final String state2;
   final ValueChanged<String> onStateChanged;
+  final VoidCallback onToggleFilters;
   final VoidCallback onSearch;
+  final bool filtersExpanded;
+  final Future<void> Function() onUseMyLocation;
+  final bool locating;
+  final String locationHintMessage;
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Find the perfect daycare', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            const Text('Search by name, zip code, city/state, and language.'),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: palette.sixty.withAlpha(210),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: palette.thirty.withAlpha(210)),
+            if (compact) ...[
+              Text(
+                'Find the perfect daycare',
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  final desktop = c.maxWidth >= 1020;
-                  final tablet = c.maxWidth >= 760 && c.maxWidth < 1020;
+              const SizedBox(height: 6),
+              const Text(
+                'Search by name, zip code, city/state, and language.',
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: locating ? null : () => onUseMyLocation(),
+                      icon: locating
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location_rounded, size: 18),
+                      label: Text(locating ? 'Detecting...' : 'Use my location'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: onToggleFilters,
+                    icon: Icon(
+                      filtersExpanded ? Icons.filter_alt_off : Icons.search,
+                      size: 18,
+                    ),
+                    label: Text(filtersExpanded ? 'Hide' : 'Search'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: palette.accent,
+                      foregroundColor: _bestTextOn(palette.accent),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Find the perfect daycare',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Search by name, zip code, city/state, and language.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: locating ? null : () => onUseMyLocation(),
+                        icon: locating
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.my_location_rounded, size: 18),
+                        label: Text(
+                          locating ? 'Detecting...' : 'Use my location',
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: onToggleFilters,
+                        icon: Icon(
+                          filtersExpanded ? Icons.filter_alt_off : Icons.search,
+                          size: 18,
+                        ),
+                        label: Text(filtersExpanded ? 'Hide filters' : 'Search'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: palette.accent,
+                          foregroundColor: _bestTextOn(palette.accent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+            if (locationHintMessage.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Location detected: $locationHintMessage',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: palette.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+            if (filtersExpanded) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: palette.sixty.withAlpha(210),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: palette.thirty.withAlpha(210)),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final desktop = c.maxWidth >= 1020;
+                    final tablet = c.maxWidth >= 760 && c.maxWidth < 1020;
 
                   if (desktop) {
                     return Row(
@@ -591,39 +1005,46 @@ class _Hero extends StatelessWidget {
                     );
                   }
 
-                  return Column(
-                    children: [
-                      _SearchNameField(nameCtrl: nameCtrl),
-                      const SizedBox(height: 10),
-                      _SearchCityField(cityCtrl: cityCtrl),
-                      const SizedBox(height: 10),
-                      _SearchZipField(zipCtrl: zipCtrl),
-                      const SizedBox(height: 10),
-                      _StateField(state2: state2, onStateChanged: onStateChanged),
-                      const SizedBox(height: 10),
-                      _LanguageField(
-                        value: language,
-                        onChanged: onLanguageChanged,
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: onSearch,
-                          icon: const Icon(Icons.search),
-                          label: const Text('Search'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: palette.accent,
-                            foregroundColor: _bestTextOn(palette.accent),
-                            minimumSize: const Size.fromHeight(46),
+                    return Column(
+                      children: [
+                        _SearchNameField(nameCtrl: nameCtrl),
+                        const SizedBox(height: 10),
+                        _SearchCityField(cityCtrl: cityCtrl),
+                        const SizedBox(height: 10),
+                        _SearchZipField(zipCtrl: zipCtrl),
+                        const SizedBox(height: 10),
+                        _StateField(state2: state2, onStateChanged: onStateChanged),
+                        const SizedBox(height: 10),
+                        _LanguageField(
+                          value: language,
+                          onChanged: onLanguageChanged,
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: onSearch,
+                            icon: const Icon(Icons.search),
+                            label: const Text('Search'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: palette.accent,
+                              foregroundColor: _bestTextOn(palette.accent),
+                              minimumSize: const Size.fromHeight(46),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
+            ] else if (compact) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Tap Search to show filters',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),
