@@ -156,7 +156,7 @@ class FeaturedTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                height: 120,
+                height: MediaQuery.sizeOf(context).width < 480 ? 130 : 120,
                 width: double.infinity,
                 child: hero.isEmpty
                     ? Container(

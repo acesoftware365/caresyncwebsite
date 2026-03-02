@@ -19,6 +19,11 @@ class DaycarePublic {
     required this.logoUrl,
     required this.heroUrl,
     required this.description,
+    required this.status,
+    required this.planStatus,
+    required this.verificationStatus,
+    required this.featureDaycare,
+    required this.featurePlan,
   });
 
   final String tenantId;
@@ -42,7 +47,19 @@ class DaycarePublic {
   final String heroUrl;
   final String description;
 
+  final String status;
+  final String planStatus;
+  final String verificationStatus;
+  final bool featureDaycare;
+  final String featurePlan;
+
   String get effectiveSlug => websiteSlug.isNotEmpty ? websiteSlug : slug;
+
+  bool get isActiveStatus => status == 'active' && planStatus == 'active';
+
+  bool get isVerified => verificationStatus == 'verified';
+
+  bool get isFeatureEligible => isActiveStatus && (isVerified || featureDaycare);
 
   factory DaycarePublic.fromTenantDoc(String tenantId, Map<String, dynamic> d) {
     final daycareName = (d['daycareName'] ?? d['name'] ?? '').toString();
@@ -64,8 +81,12 @@ class DaycarePublic {
     final num = (d['phoneNumber'] ?? '').toString().trim();
     final phone = num.isEmpty ? '' : (area.isEmpty ? num : '($area) $num');
 
-    final langsRaw = (d['languages'] as List?) ?? const [];
-    final languages = langsRaw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+    final rawLangs = d['languages'];
+    final langsRaw = rawLangs is List ? rawLangs : const [];
+    final languages = langsRaw
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
 
     int capacity = 0;
     final capRaw = d['capacity'];
@@ -96,6 +117,14 @@ class DaycarePublic {
         defaultBucket: 'liisgo-daycare-system.firebasestorage.app',
       ),
       description: (d['websiteDescription'] ?? '').toString(),
+      status: (d['status'] ?? 'active').toString().toLowerCase().trim(),
+      planStatus: (d['planStatus'] ?? 'active').toString().toLowerCase().trim(),
+      verificationStatus: (d['verificationStatus'] ?? 'not_yet_verified')
+          .toString()
+          .toLowerCase()
+          .trim(),
+      featureDaycare: (d['featureDaycare'] ?? false) == true,
+      featurePlan: (d['featurePlan'] ?? 'standard').toString().toLowerCase().trim(),
     );
   }
 }

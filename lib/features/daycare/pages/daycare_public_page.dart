@@ -223,6 +223,14 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
               'websiteShowShareButton',
               fallback: true,
             );
+            final verificationStatus = (d['verificationStatus'] ?? 'not_yet_verified')
+                .toString()
+                .toLowerCase()
+                .trim();
+            final featurePlan = (d['featurePlan'] ?? 'standard')
+                .toString()
+                .toLowerCase()
+                .trim();
             final instagramUrl = (d['websiteInstagramUrl'] ?? '').toString().trim();
             final tikTokUrl = (d['websiteTikTokUrl'] ?? '').toString().trim();
             final websiteUrl = _pickWebsite(d);
@@ -270,6 +278,8 @@ class _DaycarePublicPageState extends State<DaycarePublicPage> {
                       city: city,
                       state: state,
                       zip: zip,
+                      verificationStatus: verificationStatus,
+                      featurePlan: featurePlan,
                       palette: palette,
                       showShareButton: showShareButton,
                       onShareWebsite: () {
@@ -1333,6 +1343,8 @@ class _TopHeader extends StatelessWidget {
     required this.city,
     required this.state,
     required this.zip,
+    required this.verificationStatus,
+    required this.featurePlan,
     required this.palette,
     required this.showShareButton,
     required this.onShareWebsite,
@@ -1342,6 +1354,8 @@ class _TopHeader extends StatelessWidget {
   final String city;
   final String state;
   final String zip;
+  final String verificationStatus;
+  final String featurePlan;
   final _WebsitePalette palette;
   final bool showShareButton;
   final VoidCallback onShareWebsite;
@@ -1353,6 +1367,17 @@ class _TopHeader extends StatelessWidget {
       state,
       zip,
     ].where((e) => e.trim().isNotEmpty).join(', ');
+    final isVerified = verificationStatus == 'verified';
+    final verificationLabel = isVerified ? 'Verified' : 'Not Yet Verified';
+    final verificationColor = isVerified
+        ? palette.thirty.withAlpha(120)
+        : Colors.orange.withAlpha(90);
+    final planLabel = switch (featurePlan) {
+      'premium' => 'Premium Plan',
+      'plus' => 'Plus Plan',
+      _ => 'Standard Plan',
+    };
+
     return Card(
       color: Colors.white.withAlpha(235),
       child: Padding(
@@ -1381,12 +1406,27 @@ class _TopHeader extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: palette.thirty.withAlpha(120),
+                          color: verificationColor,
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: const Text(
-                          'Verified',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        child: Text(
+                          verificationLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.sixty.withAlpha(200),
+                          border: Border.all(color: palette.thirty.withAlpha(160)),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          planLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],

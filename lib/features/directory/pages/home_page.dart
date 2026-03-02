@@ -273,7 +273,41 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
 
                     return LayoutBuilder(
                       builder: (context, c) {
-                        final cols = c.maxWidth > 900 ? 4 : (c.maxWidth > 640 ? 2 : 1);
+                        final isMobile = c.maxWidth < 640;
+
+                        Widget buildFeaturedTile(DaycarePublic x) {
+                          return FeaturedTile(
+                            item: x,
+                            onTap: () {
+                              AnalyticsEventLogger.log(
+                                eventType: 'click_featured_daycare',
+                                pageType: 'home',
+                                tenantId: x.tenantId,
+                                slug: x.effectiveSlug,
+                                data: {'name': x.name},
+                              );
+                              context.go('/daycare/${x.effectiveSlug}');
+                            },
+                          );
+                        }
+
+                        if (isMobile) {
+                          final cardWidth = c.maxWidth.clamp(220.0, 280.0).toDouble();
+                          return SizedBox(
+                            height: 230,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: items.length,
+                              separatorBuilder: (_, index) => const SizedBox(width: 12),
+                              itemBuilder: (_, i) => SizedBox(
+                                width: cardWidth,
+                                child: buildFeaturedTile(items[i]),
+                              ),
+                            ),
+                          );
+                        }
+
+                        final cols = c.maxWidth > 900 ? 4 : 2;
                         return GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -284,22 +318,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                             mainAxisSpacing: 12,
                             childAspectRatio: 1.35,
                           ),
-                          itemBuilder: (_, i) {
-                            final x = items[i];
-                            return FeaturedTile(
-                              item: x,
-                              onTap: () {
-                                AnalyticsEventLogger.log(
-                                  eventType: 'click_featured_daycare',
-                                  pageType: 'home',
-                                  tenantId: x.tenantId,
-                                  slug: x.effectiveSlug,
-                                  data: {'name': x.name},
-                                );
-                                context.go('/daycare/${x.effectiveSlug}');
-                              },
-                            );
-                          },
+                          itemBuilder: (_, i) => buildFeaturedTile(items[i]),
                         );
                       },
                     );
