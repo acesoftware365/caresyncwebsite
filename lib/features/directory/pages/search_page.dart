@@ -101,15 +101,20 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
     final state = normalizeStateCode(state2);
     if (state.isNotEmpty) qp['state'] = state;
     if (languageValue.trim().isNotEmpty) qp['language'] = languageValue.trim();
-    if (licenseCtrl.text.trim().isNotEmpty) qp['license'] = licenseCtrl.text.trim();
-    if (capacityCtrl.text.trim().isNotEmpty) qp['capacity'] = capacityCtrl.text.trim();
+    if (licenseCtrl.text.trim().isNotEmpty) {
+      qp['license'] = licenseCtrl.text.trim();
+    }
+    if (capacityCtrl.text.trim().isNotEmpty) {
+      qp['capacity'] = capacityCtrl.text.trim();
+    }
     context.go(Uri(path: '/search', queryParameters: qp).toString());
   }
 
   @override
   Widget build(BuildContext context) {
-    final cfgStream =
-        FirebaseFirestore.instance.doc('system/daycarefinder_config').snapshots();
+    final cfgStream = FirebaseFirestore.instance
+        .doc('system/daycarefinder_config')
+        .snapshots();
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: cfgStream,
       builder: (context, cfgSnap) {
@@ -124,90 +129,100 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
-              Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    colors: [
-                      palette.sixty,
-                      Color.lerp(palette.sixty, palette.thirty, 0.55)!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      colors: [
+                        palette.sixty,
+                        Color.lerp(palette.sixty, palette.thirty, 0.55)!,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(color: palette.thirty.withAlpha(170)),
                   ),
-                  border: Border.all(color: palette.thirty.withAlpha(170)),
+                  child: Text(
+                    'Use filters to quickly find the best daycare fit for your family.',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                child: Text(
-                  'Use filters to quickly find the best daycare fit for your family.',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                _FiltersCard(
+                  nameCtrl: nameCtrl,
+                  cityCtrl: cityCtrl,
+                  zipCtrl: zipCtrl,
+                  state2: state2,
+                  palette: palette,
+                  onStateChanged: (v) => setState(() => state2 = v),
+                  languageValue: languageValue,
+                  onLanguageChanged: (v) => setState(() => languageValue = v),
+                  licenseCtrl: licenseCtrl,
+                  capacityCtrl: capacityCtrl,
+                  onSearch: () {
+                    _applyToUrl();
+                    _runSearch();
+                  },
+                  onClear: () {
+                    nameCtrl.clear();
+                    cityCtrl.clear();
+                    zipCtrl.clear();
+                    licenseCtrl.clear();
+                    setState(() => languageValue = '');
+                    capacityCtrl.clear();
+                    setState(() => state2 = '');
+                    context.go('/search');
+                    _runSearch();
+                  },
                 ),
-              ),
-              _FiltersCard(
-                nameCtrl: nameCtrl,
-                cityCtrl: cityCtrl,
-                zipCtrl: zipCtrl,
-                state2: state2,
-                palette: palette,
-                onStateChanged: (v) => setState(() => state2 = v),
-                languageValue: languageValue,
-                onLanguageChanged: (v) => setState(() => languageValue = v),
-                licenseCtrl: licenseCtrl,
-                capacityCtrl: capacityCtrl,
-                onSearch: () {
-                  _applyToUrl();
-                  _runSearch();
-                },
-                onClear: () {
-                  nameCtrl.clear();
-                  cityCtrl.clear();
-                  zipCtrl.clear();
-                  licenseCtrl.clear();
-                  setState(() => languageValue = '');
-                  capacityCtrl.clear();
-                  setState(() => state2 = '');
-                  context.go('/search');
-                  _runSearch();
-                },
-              ),
-              const SizedBox(height: 14),
-              StreamBuilder<List<DaycarePublic>>(
-                stream: resultsStream,
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final items = snap.data ?? const [];
-                  if (items.isEmpty) {
-                    return Card(
-                      color: palette.sixty.withAlpha(185),
-                      child: const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('No results found. Try different filters.'),
-                      ),
-                    );
-                  }
+                const SizedBox(height: 14),
+                StreamBuilder<List<DaycarePublic>>(
+                  stream: resultsStream,
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    final items = snap.data ?? const [];
+                    if (items.isEmpty) {
+                      return Card(
+                        color: palette.sixty.withAlpha(185),
+                        child: const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'No results found. Try different filters.',
+                          ),
+                        ),
+                      );
+                    }
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${items.length} results', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 10),
-                      ...items.map((x) => Padding(
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${items.length} results',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 10),
+                        ...items.map(
+                          (x) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: DaycareCard(
                               item: x,
-                              onTap: () => context.go('/daycare/${x.effectiveSlug}'),
+                              onTap: () =>
+                                  context.push('/daycare/${x.effectiveSlug}'),
                             ),
-                          )),
-                    ],
-                  );
-                },
-              ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -302,9 +317,10 @@ class _FiltersCard extends StatelessWidget {
                         value: '',
                         child: Text('Any State'),
                       ),
-                      ...usStateCodes
-                          .map((code) =>
-                              DropdownMenuItem(value: code, child: Text(code))),
+                      ...usStateCodes.map(
+                        (code) =>
+                            DropdownMenuItem(value: code, child: Text(code)),
+                      ),
                     ],
                     onChanged: (v) => onStateChanged((v ?? '').toUpperCase()),
                   ),
@@ -322,8 +338,10 @@ class _FiltersCard extends StatelessWidget {
                         value: '',
                         child: Text('Any Language'),
                       ),
-                      ...directoryLanguages.map((lang) =>
-                          DropdownMenuItem(value: lang, child: Text(lang))),
+                      ...directoryLanguages.map(
+                        (lang) =>
+                            DropdownMenuItem(value: lang, child: Text(lang)),
+                      ),
                     ],
                     onChanged: (v) => onLanguageChanged(v ?? ''),
                   ),

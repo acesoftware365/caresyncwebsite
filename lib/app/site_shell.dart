@@ -16,8 +16,9 @@ class _SiteShellState extends State<SiteShell> {
     final width = MediaQuery.sizeOf(context).width;
     final compactNav = width < 900;
 
-    final cfgStream =
-        FirebaseFirestore.instance.doc('system/daycarefinder_config').snapshots();
+    final cfgStream = FirebaseFirestore.instance
+        .doc('system/daycarefinder_config')
+        .snapshots();
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: cfgStream,
       builder: (context, snap) {
@@ -30,7 +31,10 @@ class _SiteShellState extends State<SiteShell> {
           body: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: palette.sixty.withAlpha(210),
                   border: Border(
@@ -39,7 +43,9 @@ class _SiteShellState extends State<SiteShell> {
                 ),
                 child: SafeArea(
                   bottom: false,
-                  child: compactNav ? _compactNav(context) : _desktopNav(context),
+                  child: compactNav
+                      ? _compactNav(context)
+                      : _desktopNav(context),
                 ),
               ),
               Expanded(child: widget.child),
@@ -58,9 +64,9 @@ class _SiteShellState extends State<SiteShell> {
           onTap: () => context.go('/'),
           child: Text(
             'DaycareFinder.com',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
         const Spacer(),
@@ -80,9 +86,9 @@ class _SiteShellState extends State<SiteShell> {
               'DaycareFinder.com',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
         ),
@@ -121,7 +127,9 @@ class _SiteFooter extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1240),
-          child: compact ? _compactFooter(textTheme) : _desktopFooter(textTheme),
+          child: compact
+              ? _compactFooter(textTheme)
+              : _desktopFooter(textTheme),
         ),
       ),
     );
@@ -146,8 +154,11 @@ class _SiteFooter extends StatelessWidget {
           spacing: 8,
           runSpacing: 4,
           children: [
-            Text('Powered by Liisgo Daycare System', style: textTheme.bodySmall),
-            Text('Version 1.0.26+40', style: textTheme.bodySmall),
+            Text(
+              'Powered by Liisgo Daycare System',
+              style: textTheme.bodySmall,
+            ),
+            Text('Version 1.0.26+41', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -208,10 +219,7 @@ class _SiteFooter extends StatelessWidget {
               '© 2026 Daycare.com. All rights reserved.',
               style: textTheme.bodySmall,
             ),
-            Text(
-              'Version 1.0.26+40',
-              style: textTheme.bodySmall,
-            ),
+            Text('Version 1.0.26+41', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -220,32 +228,17 @@ class _SiteFooter extends StatelessWidget {
 }
 
 class _ShellPalette {
-  const _ShellPalette({
-    required this.sixty,
-    required this.thirty,
-  });
+  const _ShellPalette({required this.sixty, required this.thirty});
 
   final Color sixty;
   final Color thirty;
 }
 
 const Map<String, _ShellPalette> _shellPalettes = {
-  'blush': _ShellPalette(
-    sixty: Color(0xFFFFF0F5),
-    thirty: Color(0xFFF8C7D8),
-  ),
-  'coastal': _ShellPalette(
-    sixty: Color(0xFFEAF4F8),
-    thirty: Color(0xFFBBD6E3),
-  ),
-  'sunset': _ShellPalette(
-    sixty: Color(0xFFF9EFE5),
-    thirty: Color(0xFFD9BBA0),
-  ),
-  'garden': _ShellPalette(
-    sixty: Color(0xFFEEF5EC),
-    thirty: Color(0xFFC4D9B8),
-  ),
+  'blush': _ShellPalette(sixty: Color(0xFFFFF0F5), thirty: Color(0xFFF8C7D8)),
+  'coastal': _ShellPalette(sixty: Color(0xFFEAF4F8), thirty: Color(0xFFBBD6E3)),
+  'sunset': _ShellPalette(sixty: Color(0xFFF9EFE5), thirty: Color(0xFFD9BBA0)),
+  'garden': _ShellPalette(sixty: Color(0xFFEEF5EC), thirty: Color(0xFFC4D9B8)),
   'lavender': _ShellPalette(
     sixty: Color(0xFFF3F0FF),
     thirty: Color(0xFFD7CCFF),
@@ -254,10 +247,7 @@ const Map<String, _ShellPalette> _shellPalettes = {
     sixty: Color(0xFFFFF8E8),
     thirty: Color(0xFFFDE2A4),
   ),
-  'slate': _ShellPalette(
-    sixty: Color(0xFFF1F5F9),
-    thirty: Color(0xFFCBD5E1),
-  ),
+  'slate': _ShellPalette(sixty: Color(0xFFF1F5F9), thirty: Color(0xFFCBD5E1)),
   'american_flag': _ShellPalette(
     sixty: Color(0xFFF5F8FF),
     thirty: Color(0xFFE3EAFB),
@@ -277,7 +267,11 @@ const Map<String, _ShellPalette> _shellPalettes = {
 };
 
 class _FooterCol extends StatelessWidget {
-  const _FooterCol({required this.title, required this.items, required this.compact});
+  const _FooterCol({
+    required this.title,
+    required this.items,
+    required this.compact,
+  });
   final String title;
   final List<String> items;
   final bool compact;
@@ -289,12 +283,19 @@ class _FooterCol extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
-          ...items.map((x) => Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(x, style: Theme.of(context).textTheme.bodyMedium),
-              )),
+          ...items.map(
+            (x) => Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Text(x, style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          ),
         ],
       ),
     );

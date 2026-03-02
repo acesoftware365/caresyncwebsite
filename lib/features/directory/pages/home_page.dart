@@ -42,10 +42,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     super.initState();
     svc = DaycareDirectoryService(FirebaseFirestore.instance);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AnalyticsEventLogger.log(
-        eventType: 'page_view_home',
-        pageType: 'home',
-      );
+      AnalyticsEventLogger.log(eventType: 'page_view_home', pageType: 'home');
     });
     _restoreSavedLocation();
   }
@@ -80,13 +77,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     AnalyticsEventLogger.log(
       eventType: 'click_home_search',
       pageType: 'home',
-      data: {
-        'name': n,
-        'state': st,
-        'city': c,
-        'zip': z,
-        'language': l,
-      },
+      data: {'name': n, 'state': st, 'city': c, 'zip': z, 'language': l},
     );
     setState(() {
       inlineResultsTitle = 'All Daycares';
@@ -151,6 +142,88 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     return eligible;
   }
 
+  DaycareSearchFilters _locationContextFilters() {
+    return DaycareSearchFilters(
+      city: quickCity.text.trim(),
+      state: quickState,
+      zip: quickZip.text.trim(),
+    );
+  }
+
+  bool get _hasLocationContext {
+    return quickCity.text.trim().isNotEmpty ||
+        quickState.trim().isNotEmpty ||
+        quickZip.text.trim().isNotEmpty;
+  }
+
+  List<DaycarePublic> _rankContextFeatured(List<DaycarePublic> items) {
+    final cityQ = normalizeCity(quickCity.text).toLowerCase();
+    final stateQ = normalizeStateCode(quickState);
+    final zipQ = quickZip.text.trim();
+
+    final eligible = items.where((x) => x.isFeatureEligible).toList();
+
+    int locationBoost(DaycarePublic item) {
+      var score = 0;
+      if (zipQ.isNotEmpty) {
+        if (item.zip == zipQ) {
+          score += 200;
+        } else if (item.zip.startsWith(zipQ)) {
+          score += 120;
+        }
+      }
+      if (cityQ.isNotEmpty && normalizeCity(item.city).toLowerCase() == cityQ) {
+        score += 100;
+      }
+      if (stateQ.isNotEmpty && normalizeStateCode(item.state) == stateQ) {
+        score += 30;
+      }
+      return score;
+    }
+
+    eligible.sort((a, b) {
+      final scoreA = _featuredScore(a) + locationBoost(a);
+      final scoreB = _featuredScore(b) + locationBoost(b);
+      final scoreDiff = scoreB.compareTo(scoreA);
+      if (scoreDiff != 0) return scoreDiff;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    return eligible;
+  }
+
+  Future<List<DaycarePublic>> _buildFeaturedItems() async {
+    if (preferNearbyFeatured && inlineResultsFuture != null) {
+      final nearby = await inlineResultsFuture!;
+      return _rankNearbyFeatured(nearby).take(3).toList();
+    }
+
+    if (_hasLocationContext) {
+      final nearby = await svc
+          .search(_locationContextFilters())
+          .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+      final rankedNearby = _rankContextFeatured(nearby);
+      if (rankedNearby.length >= 3) {
+        return rankedNearby.take(3).toList();
+      }
+
+      final fallback = await svc
+          .featured(limit: 6)
+          .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+      final merged = <DaycarePublic>[
+        ...rankedNearby,
+        ...fallback.where(
+          (item) => !rankedNearby.any((x) => x.tenantId == item.tenantId),
+        ),
+      ];
+      return merged.take(3).toList();
+    }
+
+    return svc
+        .featured(limit: 3)
+        .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+  }
+
   Future<void> _useMyLocation() async {
     if (locating) return;
     setState(() {
@@ -168,25 +241,20 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
         if (city.isNotEmpty) quickCity.text = city;
         if (stateCode.isNotEmpty) quickState = stateCode;
         if (zip.isNotEmpty) quickZip.text = zip;
-        locationHintMessage = [city, stateCode, zip]
-            .where((e) => e.trim().isNotEmpty)
-            .join(', ');
+        locationHintMessage = [
+          city,
+          stateCode,
+          zip,
+        ].where((e) => e.trim().isNotEmpty).join(', ');
       });
 
       AnalyticsEventLogger.log(
         eventType: 'use_home_location_success',
         pageType: 'home',
-        data: {
-          'city': city,
-          'state': stateCode,
-          'zip': zip,
-        },
+        data: {'city': city, 'state': stateCode, 'zip': zip},
       );
 
-      final filters = DaycareSearchFilters(
-        city: city,
-        state: stateCode,
-      );
+      final filters = DaycareSearchFilters(city: city, state: stateCode);
       setState(() {
         filtersExpanded = false;
         inlineResultsTitle = 'Near You';
@@ -207,7 +275,9 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location unavailable. Please enter ZIP or city/state.'),
+          content: Text(
+            'Location unavailable. Please enter ZIP or city/state.',
+          ),
         ),
       );
       AnalyticsEventLogger.log(
@@ -232,17 +302,18 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
       if (city.isNotEmpty) quickCity.text = city;
       if (stateCode.isNotEmpty) quickState = stateCode;
       if (zip.isNotEmpty) quickZip.text = zip;
-      locationHintMessage =
-          [city, stateCode, zip].where((e) => e.trim().isNotEmpty).join(', ');
+      locationHintMessage = [
+        city,
+        stateCode,
+        zip,
+      ].where((e) => e.trim().isNotEmpty).join(', ');
 
       filtersExpanded = false;
       inlineResultsTitle = 'Near You';
       showInlineResults = true;
       preferNearbyFeatured = true;
       inlineResultsFuture = svc
-          .search(
-            DaycareSearchFilters(city: city, state: stateCode),
-          )
+          .search(DaycareSearchFilters(city: city, state: stateCode))
           .timeout(const Duration(seconds: 12), onTimeout: () => const []);
     });
   }
@@ -258,7 +329,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
       builder: (context, snap) {
         final data = snap.data?.data() ?? <String, dynamic>{};
         final config = _FinderConfig.fromMap(data);
-        final palette = _finderPalettes[config.palette] ?? _finderPalettes['blush']!;
+        final palette =
+            _finderPalettes[config.palette] ?? _finderPalettes['blush']!;
         final promos = config.promos.where((e) => e.enabled).toList();
 
         return Center(
@@ -298,7 +370,9 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                                     color: Colors.white.withAlpha(210),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Icon(Icons.family_restroom_outlined),
+                                  child: const Icon(
+                                    Icons.family_restroom_outlined,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -357,9 +431,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                           Expanded(
                             child: Text(
                               'Discover trusted daycare programs near you.',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -417,7 +490,10 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    Text('Featured Daycares', style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Featured Daycares',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const Spacer(),
                     TextButton(
                       onPressed: () {
@@ -432,11 +508,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                 ),
                 const SizedBox(height: 10),
                 FutureBuilder<List<DaycarePublic>>(
-                  future: (preferNearbyFeatured && inlineResultsFuture != null)
-                      ? inlineResultsFuture
-                      : svc
-                          .featured(limit: 3)
-                          .timeout(const Duration(seconds: 12), onTimeout: () => const []),
+                  future: _buildFeaturedItems(),
                   builder: (context, snap) {
                     if (snap.hasError) {
                       return Card(
@@ -455,10 +527,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                         child: Center(child: CircularProgressIndicator()),
                       );
                     }
-                    final sourceItems = snap.data ?? [];
-                    final items = preferNearbyFeatured
-                        ? _rankNearbyFeatured(sourceItems).take(3).toList()
-                        : sourceItems;
+                    final items = snap.data ?? [];
                     if (items.isEmpty) {
                       return Card(
                         color: palette.sixty.withAlpha(190),
@@ -484,19 +553,22 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                                 slug: x.effectiveSlug,
                                 data: {'name': x.name},
                               );
-                              context.go('/daycare/${x.effectiveSlug}');
+                              context.push('/daycare/${x.effectiveSlug}');
                             },
                           );
                         }
 
                         if (isMobile) {
-                          final cardWidth = c.maxWidth.clamp(220.0, 280.0).toDouble();
+                          final cardWidth = c.maxWidth
+                              .clamp(220.0, 280.0)
+                              .toDouble();
                           return SizedBox(
                             height: 230,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: items.length,
-                              separatorBuilder: (_, index) => const SizedBox(width: 12),
+                              separatorBuilder: (_, index) =>
+                                  const SizedBox(width: 12),
                               itemBuilder: (_, i) => SizedBox(
                                 width: cardWidth,
                                 child: buildFeaturedTile(items[i]),
@@ -510,12 +582,13 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: items.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cols,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 1.35,
-                          ),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: cols,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 1.35,
+                              ),
                           itemBuilder: (_, i) => buildFeaturedTile(items[i]),
                         );
                       },
@@ -544,7 +617,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                   ),
                   const SizedBox(height: 10),
                   FutureBuilder<List<DaycarePublic>>(
-                    future: inlineResultsFuture ??
+                    future:
+                        inlineResultsFuture ??
                         svc
                             .search(
                               DaycareSearchFilters(
@@ -582,7 +656,9 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                                 SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                                 SizedBox(width: 10),
                                 Expanded(
@@ -615,7 +691,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                               padding: const EdgeInsets.only(bottom: 10),
                               child: DaycareCard(
                                 item: x,
-                                onTap: () => context.go('/daycare/${x.effectiveSlug}'),
+                                onTap: () =>
+                                    context.push('/daycare/${x.effectiveSlug}'),
                               ),
                             ),
                           ),
@@ -638,13 +715,17 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                           Icons.verified_user_outlined,
                           color: palette.accent.withAlpha(220),
                         ),
-                        const Text('Only daycares with websites ready are listed.'),
+                        const Text(
+                          'Only daycares with websites ready are listed.',
+                        ),
                         const SizedBox(width: 12),
                         Icon(
                           Icons.palette_outlined,
                           color: palette.accent.withAlpha(220),
                         ),
-                        const Text('Clean, family-friendly browsing experience.'),
+                        const Text(
+                          'Clean, family-friendly browsing experience.',
+                        ),
                       ],
                     ),
                   ),
@@ -661,7 +742,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
   Future<void> _openExternalUrl(String raw) async {
     final value = raw.trim();
     if (value.isEmpty) return;
-    final normalized = value.startsWith('http://') || value.startsWith('https://')
+    final normalized =
+        value.startsWith('http://') || value.startsWith('https://')
         ? value
         : 'https://$value';
     final uri = Uri.tryParse(normalized);
@@ -757,9 +839,9 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                   );
                   await Clipboard.setData(ClipboardData(text: cleanUrl));
                   if (!mounted) return;
-                  ScaffoldMessenger.of(
-                    this.context,
-                  ).showSnackBar(SnackBar(content: Text('Link copied: $cleanUrl')));
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(content: Text('Link copied: $cleanUrl')),
+                  );
                 },
               ),
               const SizedBox(height: 8),
@@ -819,9 +901,7 @@ class _Hero extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Search by name, zip code, city/state, and language.',
-              ),
+              const Text('Search by name, zip code, city/state, and language.'),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -835,7 +915,9 @@ class _Hero extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.my_location_rounded, size: 18),
-                      label: Text(locating ? 'Detecting...' : 'Use my location'),
+                      label: Text(
+                        locating ? 'Detecting...' : 'Use my location',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -884,7 +966,9 @@ class _Hero extends StatelessWidget {
                             ? const SizedBox(
                                 width: 14,
                                 height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.my_location_rounded, size: 18),
                         label: Text(
@@ -897,7 +981,9 @@ class _Hero extends StatelessWidget {
                           filtersExpanded ? Icons.filter_alt_off : Icons.search,
                           size: 18,
                         ),
-                        label: Text(filtersExpanded ? 'Hide filters' : 'Search'),
+                        label: Text(
+                          filtersExpanded ? 'Hide filters' : 'Search',
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: palette.accent,
                           foregroundColor: _bestTextOn(palette.accent),
@@ -913,9 +999,9 @@ class _Hero extends StatelessWidget {
               Text(
                 'Location detected: $locationHintMessage',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: palette.accent,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: palette.accent,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
             if (filtersExpanded) ...[
@@ -932,78 +1018,96 @@ class _Hero extends StatelessWidget {
                     final desktop = c.maxWidth >= 1020;
                     final tablet = c.maxWidth >= 760 && c.maxWidth < 1020;
 
-                  if (desktop) {
-                    return Row(
-                      children: [
-                        Expanded(flex: 3, child: _SearchNameField(nameCtrl: nameCtrl)),
-                        const SizedBox(width: 10),
-                        Expanded(flex: 3, child: _SearchCityField(cityCtrl: cityCtrl)),
-                        const SizedBox(width: 10),
-                        Expanded(flex: 2, child: _SearchZipField(zipCtrl: zipCtrl)),
-                        const SizedBox(width: 10),
-                        SizedBox(
-                          width: 105,
-                          child: _StateField(
-                            state2: state2,
-                            onStateChanged: onStateChanged,
+                    if (desktop) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _SearchNameField(nameCtrl: nameCtrl),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: _LanguageField(
-                            value: language,
-                            onChanged: onLanguageChanged,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 3,
+                            child: _SearchCityField(cityCtrl: cityCtrl),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        _SearchCtaButton(
-                          onSearch: onSearch,
-                          palette: palette,
-                        ),
-                      ],
-                    );
-                  }
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: _SearchZipField(zipCtrl: zipCtrl),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 105,
+                            child: _StateField(
+                              state2: state2,
+                              onStateChanged: onStateChanged,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: _LanguageField(
+                              value: language,
+                              onChanged: onLanguageChanged,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          _SearchCtaButton(
+                            onSearch: onSearch,
+                            palette: palette,
+                          ),
+                        ],
+                      );
+                    }
 
-                  if (tablet) {
-                    return Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(flex: 3, child: _SearchNameField(nameCtrl: nameCtrl)),
-                            const SizedBox(width: 10),
-                            Expanded(flex: 3, child: _SearchCityField(cityCtrl: cityCtrl)),
-                            const SizedBox(width: 10),
-                            Expanded(flex: 2, child: _SearchZipField(zipCtrl: zipCtrl)),
-                            const SizedBox(width: 10),
-                            SizedBox(
-                              width: 105,
-                              child: _StateField(
-                                state2: state2,
-                                onStateChanged: onStateChanged,
+                    if (tablet) {
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: _SearchNameField(nameCtrl: nameCtrl),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _LanguageField(
-                                value: language,
-                                onChanged: onLanguageChanged,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 3,
+                                child: _SearchCityField(cityCtrl: cityCtrl),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            _SearchCtaButton(
-                              onSearch: onSearch,
-                              palette: palette,
-                            ),
-                          ],
-                        ),
-                      ],
-                    );
-                  }
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 2,
+                                child: _SearchZipField(zipCtrl: zipCtrl),
+                              ),
+                              const SizedBox(width: 10),
+                              SizedBox(
+                                width: 105,
+                                child: _StateField(
+                                  state2: state2,
+                                  onStateChanged: onStateChanged,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _LanguageField(
+                                  value: language,
+                                  onChanged: onLanguageChanged,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              _SearchCtaButton(
+                                onSearch: onSearch,
+                                palette: palette,
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
 
                     return Column(
                       children: [
@@ -1013,7 +1117,10 @@ class _Hero extends StatelessWidget {
                         const SizedBox(height: 10),
                         _SearchZipField(zipCtrl: zipCtrl),
                         const SizedBox(height: 10),
-                        _StateField(state2: state2, onStateChanged: onStateChanged),
+                        _StateField(
+                          state2: state2,
+                          onStateChanged: onStateChanged,
+                        ),
                         const SizedBox(height: 10),
                         _LanguageField(
                           value: language,
@@ -1136,8 +1243,9 @@ class _StateField extends StatelessWidget {
       decoration: _searchInputDecoration(labelText: 'State'),
       items: [
         const DropdownMenuItem(value: '', child: Text('Any State')),
-        ...usStateCodes
-            .map((code) => DropdownMenuItem(value: code, child: Text(code))),
+        ...usStateCodes.map(
+          (code) => DropdownMenuItem(value: code, child: Text(code)),
+        ),
       ],
       onChanged: (v) => onStateChanged((v ?? '').toUpperCase()),
     );
@@ -1159,8 +1267,9 @@ class _LanguageField extends StatelessWidget {
       ),
       items: [
         const DropdownMenuItem(value: '', child: Text('Any Language')),
-        ...directoryLanguages
-            .map((lang) => DropdownMenuItem(value: lang, child: Text(lang))),
+        ...directoryLanguages.map(
+          (lang) => DropdownMenuItem(value: lang, child: Text(lang)),
+        ),
       ],
       onChanged: (v) => onChanged(v ?? ''),
     );
@@ -1204,9 +1313,9 @@ class _PromoSection extends StatelessWidget {
         if (large.isNotEmpty) ...[
           Text(
             'Large Carousel',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           _PromoCarousel(
@@ -1220,15 +1329,12 @@ class _PromoSection extends StatelessWidget {
         if (small.isNotEmpty) ...[
           Text(
             'Highlights',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          _PromoSmallGrid(
-            promos: small,
-            onOpenUrl: onOpenUrl,
-          ),
+          _PromoSmallGrid(promos: small, onOpenUrl: onOpenUrl),
         ],
       ],
     );
@@ -1236,10 +1342,7 @@ class _PromoSection extends StatelessWidget {
 }
 
 class _PromoSmallGrid extends StatelessWidget {
-  const _PromoSmallGrid({
-    required this.promos,
-    required this.onOpenUrl,
-  });
+  const _PromoSmallGrid({required this.promos, required this.onOpenUrl});
 
   final List<_PromoItem> promos;
   final ValueChanged<String> onOpenUrl;
@@ -1263,11 +1366,7 @@ class _PromoSmallGrid extends StatelessWidget {
           ),
           itemBuilder: (context, i) {
             final p = promos[i];
-            return _PromoCardTile(
-              promo: p,
-              large: false,
-              onOpenUrl: onOpenUrl,
-            );
+            return _PromoCardTile(promo: p, large: false, onOpenUrl: onOpenUrl);
           },
         );
       },
@@ -1403,12 +1502,9 @@ class _PromoCarouselState extends State<_PromoCarousel> {
                     duration: const Duration(milliseconds: 280),
                     curve: Curves.easeOutCubic,
                   );
-                  Future<void>.delayed(
-                    const Duration(milliseconds: 320),
-                    () {
-                      if (mounted) _setInteraction(false);
-                    },
-                  );
+                  Future<void>.delayed(const Duration(milliseconds: 320), () {
+                    if (mounted) _setInteraction(false);
+                  });
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
@@ -1483,8 +1579,8 @@ class _PromoCardTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 if (promo.description.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),
