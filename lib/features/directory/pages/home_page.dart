@@ -341,7 +341,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
               children: [
                 Container(
                   margin: const EdgeInsets.only(bottom: 14),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     gradient: LinearGradient(
@@ -364,8 +364,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                             Row(
                               children: [
                                 Container(
-                                  width: 42,
-                                  height: 42,
+                                  width: 38,
+                                  height: 38,
                                   decoration: BoxDecoration(
                                     color: Colors.white.withAlpha(210),
                                     borderRadius: BorderRadius.circular(12),
@@ -385,32 +385,6 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.tonalIcon(
-                                onPressed: () {
-                                  AnalyticsEventLogger.log(
-                                    eventType: 'click_share_home_button',
-                                    pageType: 'home',
-                                  );
-                                  _openShareOptionsSheet(
-                                    context,
-                                    url: 'https://daycarefinder.web.app',
-                                    title: 'DaycareFinder',
-                                  );
-                                },
-                                icon: const Icon(Icons.link_rounded, size: 18),
-                                label: const Text('Share Home'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.white.withAlpha(210),
-                                  foregroundColor: palette.accent,
-                                  side: BorderSide(
-                                    color: palette.accent.withAlpha(90),
-                                  ),
-                                ),
-                              ),
                             ),
                           ],
                         );
@@ -449,7 +423,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                               );
                             },
                             icon: const Icon(Icons.link_rounded, size: 18),
-                            label: const Text('Share Home'),
+                            label: const Text('Share Website'),
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.white.withAlpha(210),
                               foregroundColor: palette.accent,
@@ -483,8 +457,10 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                   const SizedBox(height: 14),
                   _PromoSection(
                     promos: promos,
-                    rotationSeconds: config.promoRotationSeconds,
+                    rotationSecondsLarge: config.promoRotationSeconds,
+                    rotationSecondsSmall: config.promoRotationSecondsSmall,
                     onOpenUrl: _openExternalUrl,
+                    palette: palette,
                   ),
                 ],
                 const SizedBox(height: 18),
@@ -1289,102 +1265,131 @@ InputDecoration _searchInputDecoration({
   );
 }
 
-class _PromoSection extends StatelessWidget {
+class _PromoSection extends StatefulWidget {
   const _PromoSection({
     required this.promos,
-    required this.rotationSeconds,
+    required this.rotationSecondsLarge,
+    required this.rotationSecondsSmall,
     required this.onOpenUrl,
+    required this.palette,
   });
 
   final List<_PromoItem> promos;
-  final int rotationSeconds;
+  final int rotationSecondsLarge;
+  final int rotationSecondsSmall;
   final ValueChanged<String> onOpenUrl;
+  final _FinderPalette palette;
+
+  @override
+  State<_PromoSection> createState() => _PromoSectionState();
+}
+
+class _PromoSectionState extends State<_PromoSection> {
+  final GlobalKey<_PromoCarouselState> _largeCarouselKey =
+      GlobalKey<_PromoCarouselState>();
+  final GlobalKey<_PromoCarouselState> _smallCarouselKey =
+      GlobalKey<_PromoCarouselState>();
 
   @override
   Widget build(BuildContext context) {
-    final small = promos.where((p) => p.size == 'small').toList();
-    final large = promos.where((p) => p.size == 'large').toList();
+    final small = widget.promos.where((p) => p.size == 'small').toList();
+    final large = widget.promos.where((p) => p.size == 'large').toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Highlights', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Highlights',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            if (large.length > 1) ...[
+              _PromoHeaderArrowButton(
+                icon: Icons.arrow_back,
+                onTap: () => _largeCarouselKey.currentState?.goToPrev(),
+                palette: widget.palette,
+              ),
+              const SizedBox(width: 8),
+              _PromoHeaderArrowButton(
+                icon: Icons.arrow_forward,
+                onTap: () => _largeCarouselKey.currentState?.goToNext(),
+                palette: widget.palette,
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: 10),
         if (large.isNotEmpty) ...[
-          Text(
-            'Large Carousel',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
           _PromoCarousel(
+            key: _largeCarouselKey,
             promos: large,
-            rotationSeconds: rotationSeconds,
+            rotationSeconds: widget.rotationSecondsLarge,
             large: true,
-            onOpenUrl: onOpenUrl,
+            viewportFraction: 1.0,
+            onOpenUrl: widget.onOpenUrl,
           ),
           const SizedBox(height: 12),
         ],
         if (small.isNotEmpty) ...[
-          Text(
-            'Highlights',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Highlights',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (small.length > 1) ...[
+                _PromoHeaderArrowButton(
+                  icon: Icons.arrow_back,
+                  onTap: () => _smallCarouselKey.currentState?.goToPrev(),
+                  palette: widget.palette,
+                ),
+                const SizedBox(width: 8),
+                _PromoHeaderArrowButton(
+                  icon: Icons.arrow_forward,
+                  onTap: () => _smallCarouselKey.currentState?.goToNext(),
+                  palette: widget.palette,
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 8),
-          _PromoSmallGrid(promos: small, onOpenUrl: onOpenUrl),
+          _PromoCarousel(
+            key: _smallCarouselKey,
+            promos: small,
+            rotationSeconds: widget.rotationSecondsSmall,
+            large: false,
+            viewportFraction: MediaQuery.sizeOf(context).width >= 1020
+                ? 0.28
+                : (MediaQuery.sizeOf(context).width >= 760 ? 0.42 : 0.78),
+            onOpenUrl: widget.onOpenUrl,
+          ),
         ],
       ],
     );
   }
 }
 
-class _PromoSmallGrid extends StatelessWidget {
-  const _PromoSmallGrid({required this.promos, required this.onOpenUrl});
-
-  final List<_PromoItem> promos;
-  final ValueChanged<String> onOpenUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = constraints.maxWidth >= 980
-            ? 3
-            : (constraints.maxWidth >= 620 ? 2 : 1);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: promos.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.02,
-          ),
-          itemBuilder: (context, i) {
-            final p = promos[i];
-            return _PromoCardTile(promo: p, large: false, onOpenUrl: onOpenUrl);
-          },
-        );
-      },
-    );
-  }
-}
-
 class _PromoCarousel extends StatefulWidget {
   const _PromoCarousel({
+    super.key,
     required this.promos,
     required this.rotationSeconds,
     required this.large,
+    required this.viewportFraction,
     required this.onOpenUrl,
   });
 
   final List<_PromoItem> promos;
   final int rotationSeconds;
   final bool large;
+  final double viewportFraction;
   final ValueChanged<String> onOpenUrl;
 
   @override
@@ -1392,7 +1397,7 @@ class _PromoCarousel extends StatefulWidget {
 }
 
 class _PromoCarouselState extends State<_PromoCarousel> {
-  late final PageController _controller;
+  late PageController _controller;
   Timer? _timer;
   int _index = 0;
   bool _userInteracting = false;
@@ -1400,13 +1405,21 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   @override
   void initState() {
     super.initState();
-    _controller = PageController();
+    _controller = PageController(viewportFraction: widget.viewportFraction);
     _startTimer();
   }
 
   @override
   void didUpdateWidget(covariant _PromoCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewportFraction != widget.viewportFraction) {
+      final old = _controller;
+      _controller = PageController(
+        initialPage: _index,
+        viewportFraction: widget.viewportFraction,
+      );
+      old.dispose();
+    }
     if (oldWidget.rotationSeconds != widget.rotationSeconds ||
         oldWidget.promos.length != widget.promos.length) {
       _timer?.cancel();
@@ -1427,12 +1440,16 @@ class _PromoCarouselState extends State<_PromoCarousel> {
     _timer = Timer.periodic(Duration(seconds: secs), (_) {
       if (_userInteracting) return;
       if (!mounted || !_controller.hasClients) return;
-      final next = (_index + 1) % widget.promos.length;
-      _controller.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
+      if (_isAtEnd()) {
+        _controller.jumpToPage(0);
+      } else {
+        final next = _index + 1;
+        _controller.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      }
     });
   }
 
@@ -1441,47 +1458,108 @@ class _PromoCarouselState extends State<_PromoCarousel> {
     setState(() => _userInteracting = value);
   }
 
+  void goToPrev() {
+    if (!_controller.hasClients || widget.promos.isEmpty) return;
+    _setInteraction(true);
+    if (_isAtStart()) {
+      _controller.jumpToPage(widget.promos.length - 1);
+    } else {
+      final prev = _index - 1;
+      _controller.animateToPage(
+        prev,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    Future<void>.delayed(const Duration(milliseconds: 320), () {
+      if (mounted) _setInteraction(false);
+    });
+  }
+
+  void goToNext() {
+    if (!_controller.hasClients || widget.promos.isEmpty) return;
+    _setInteraction(true);
+    if (_isAtEnd()) {
+      _controller.jumpToPage(0);
+    } else {
+      final next = _index + 1;
+      _controller.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    Future<void>.delayed(const Duration(milliseconds: 320), () {
+      if (mounted) _setInteraction(false);
+    });
+  }
+
+  bool _isAtEnd() {
+    if (!_controller.hasClients) return false;
+    final pos = _controller.position;
+    return pos.pixels >= (pos.maxScrollExtent - 1.0);
+  }
+
+  bool _isAtStart() {
+    if (!_controller.hasClients) return true;
+    final pos = _controller.position;
+    return pos.pixels <= (pos.minScrollExtent + 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final height = widget.large ? 340.0 : 240.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isDesktop = screenWidth >= 1020;
+    final height = widget.large
+        ? 340.0
+        : (isDesktop ? 380.0 : 500.0);
+    final bottomShadowSpace = widget.large ? 22.0 : (isDesktop ? 34.0 : 36.0);
     return Column(
       children: [
-        MouseRegion(
-          onEnter: (_) => _setInteraction(true),
-          onExit: (_) => _setInteraction(false),
-          child: GestureDetector(
-            onPanDown: (_) => _setInteraction(true),
-            onPanEnd: (_) => _setInteraction(false),
-            onPanCancel: () => _setInteraction(false),
-            onTapDown: (_) => _setInteraction(true),
-            onTapUp: (_) => _setInteraction(false),
-            onTapCancel: () => _setInteraction(false),
-            child: SizedBox(
-              height: height,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (notification is ScrollStartNotification) {
-                    _setInteraction(true);
-                  } else if (notification is ScrollEndNotification) {
-                    _setInteraction(false);
-                  }
-                  return false;
-                },
-                child: PageView.builder(
-                  controller: _controller,
-                  itemCount: widget.promos.length,
-                  onPageChanged: (v) => setState(() => _index = v),
-                  itemBuilder: (context, i) {
-                    final p = widget.promos[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: _PromoCardTile(
-                        promo: p,
-                        large: widget.large,
-                        onOpenUrl: widget.onOpenUrl,
-                      ),
-                    );
+        SizedBox(
+          height: height + bottomShadowSpace,
+          child: MouseRegion(
+            onEnter: (_) => _setInteraction(true),
+            onExit: (_) => _setInteraction(false),
+            child: GestureDetector(
+              onPanDown: (_) => _setInteraction(true),
+              onPanEnd: (_) => _setInteraction(false),
+              onPanCancel: () => _setInteraction(false),
+              onTapDown: (_) => _setInteraction(true),
+              onTapUp: (_) => _setInteraction(false),
+              onTapCancel: () => _setInteraction(false),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: bottomShadowSpace),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification is ScrollStartNotification) {
+                      _setInteraction(true);
+                    } else if (notification is ScrollEndNotification) {
+                      _setInteraction(false);
+                    }
+                    return false;
                   },
+                  child: PageView.builder(
+                    controller: _controller,
+                    clipBehavior: widget.large ? Clip.none : Clip.hardEdge,
+                    padEnds: false,
+                    itemCount: widget.promos.length,
+                    onPageChanged: (v) => setState(() => _index = v),
+                    itemBuilder: (context, i) {
+                      final p = widget.promos[i];
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: i == widget.promos.length - 1 ? 0 : 6,
+                          bottom: widget.large ? 10 : 24,
+                        ),
+                        child: _PromoCardTile(
+                          promo: p,
+                          large: widget.large,
+                          onOpenUrl: widget.onOpenUrl,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -1539,84 +1617,135 @@ class _PromoCardTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: promo.imageUrl.trim().isEmpty
-                ? Container(
-                    color: const Color(0xFFF6F7F8),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.photo_outlined,
-                      size: 36,
-                      color: _finderPalettes['slate']!.accent.withAlpha(120),
-                    ),
-                  )
-                : Image.network(
-                    promo.imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    errorBuilder: (context, error, stackTrace) => Container(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withAlpha(32),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: promo.imageUrl.trim().isEmpty
+                  ? Container(
                       color: const Color(0xFFF6F7F8),
                       alignment: Alignment.center,
                       child: Icon(
-                        Icons.broken_image_outlined,
+                        Icons.photo_outlined,
+                        size: 36,
                         color: _finderPalettes['slate']!.accent.withAlpha(120),
                       ),
-                    ),
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  promo.title.isEmpty ? 'Promotion' : promo.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (promo.description.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    promo.description,
-                    maxLines: large ? 3 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    if (promo.youtubeUrl.trim().isNotEmpty)
-                      OutlinedButton.icon(
-                        onPressed: () => onOpenUrl(promo.youtubeUrl),
-                        icon: const Icon(Icons.play_circle_outline, size: 18),
-                        label: const Text('YouTube'),
-                      ),
-                    if (promo.ctaUrl.trim().isNotEmpty)
-                      FilledButton(
-                        onPressed: () => onOpenUrl(promo.ctaUrl),
-                        child: Text(
-                          promo.ctaLabel.trim().isEmpty
-                              ? 'Learn More'
-                              : promo.ctaLabel,
+                    )
+                  : Image.network(
+                      promo.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: const Color(0xFFF6F7F8),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: _finderPalettes['slate']!.accent.withAlpha(
+                            120,
+                          ),
                         ),
                       ),
-                  ],
-                ),
-              ],
+                    ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    promo.title.isEmpty ? 'Promotion' : promo.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (promo.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      promo.description,
+                      maxLines: large ? 3 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      if (promo.youtubeUrl.trim().isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => onOpenUrl(promo.youtubeUrl),
+                          icon: const Icon(Icons.play_circle_outline, size: 18),
+                          label: const Text('YouTube'),
+                        ),
+                      if (promo.ctaUrl.trim().isNotEmpty)
+                        FilledButton(
+                          onPressed: () => onOpenUrl(promo.ctaUrl),
+                          child: Text(
+                            promo.ctaLabel.trim().isEmpty
+                                ? 'Learn More'
+                                : promo.ctaLabel,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoHeaderArrowButton extends StatelessWidget {
+  const _PromoHeaderArrowButton({
+    required this.icon,
+    required this.onTap,
+    required this.palette,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final _FinderPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Ink(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: palette.thirty.withAlpha(210),
+          border: Border.all(color: palette.accent.withAlpha(40)),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).colorScheme.shadow.withAlpha(26),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 18, color: palette.accent),
       ),
     );
   }
@@ -1626,11 +1755,13 @@ class _FinderConfig {
   _FinderConfig({
     required this.palette,
     required this.promoRotationSeconds,
+    required this.promoRotationSecondsSmall,
     required this.promos,
   });
 
   final String palette;
   final int promoRotationSeconds;
+  final int promoRotationSecondsSmall;
   final List<_PromoItem> promos;
 
   factory _FinderConfig.fromMap(Map<String, dynamic> data) {
@@ -1639,6 +1770,11 @@ class _FinderConfig {
     final parsedSeconds = rawSeconds is int
         ? rawSeconds
         : int.tryParse((rawSeconds ?? '').toString());
+    final rawSecondsSmall = data['promoRotationSecondsSmall'];
+    final parsedSecondsSmall = rawSecondsSmall is int
+        ? rawSecondsSmall
+        : int.tryParse((rawSecondsSmall ?? '').toString());
+    final largeSeconds = (parsedSeconds ?? 5).clamp(1, 120);
     final raw = (data['promos'] as List?) ?? const [];
     final promos = raw
         .whereType<Map>()
@@ -1646,7 +1782,11 @@ class _FinderConfig {
         .toList();
     return _FinderConfig(
       palette: palette,
-      promoRotationSeconds: (parsedSeconds ?? 5).clamp(1, 120),
+      promoRotationSeconds: largeSeconds,
+      promoRotationSecondsSmall: (parsedSecondsSmall ?? largeSeconds).clamp(
+        1,
+        120,
+      ),
       promos: promos,
     );
   }

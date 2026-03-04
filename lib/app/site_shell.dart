@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SiteShell extends StatefulWidget {
   const SiteShell({super.key, required this.child});
@@ -44,7 +46,7 @@ class _SiteShellState extends State<SiteShell> {
                 child: SafeArea(
                   bottom: false,
                   child: compactNav
-                      ? _compactNav(context)
+                      ? _compactNav(context, palette)
                       : _desktopNav(context),
                 ),
               ),
@@ -76,7 +78,7 @@ class _SiteShellState extends State<SiteShell> {
     );
   }
 
-  Widget _compactNav(BuildContext context) {
+  Widget _compactNav(BuildContext context, _ShellPalette palette) {
     return Row(
       children: [
         Expanded(
@@ -92,6 +94,27 @@ class _SiteShellState extends State<SiteShell> {
             ),
           ),
         ),
+        FilledButton.tonalIcon(
+          onPressed: () {
+            _openShareOptionsSheet(
+              context,
+              url: 'https://daycarefinder.web.app',
+              title: 'Website',
+            );
+          },
+          icon: const Icon(Icons.link_rounded, size: 16),
+          label: const Text('Share Website'),
+          style: FilledButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            minimumSize: const Size(0, 34),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            backgroundColor: Colors.white.withAlpha(210),
+            foregroundColor: palette.thirty.withAlpha(255),
+            side: BorderSide(color: palette.thirty.withAlpha(140)),
+          ),
+        ),
+        const SizedBox(width: 4),
         PopupMenuButton<String>(
           tooltip: 'Menu',
           onSelected: (value) {},
@@ -102,6 +125,87 @@ class _SiteShellState extends State<SiteShell> {
           icon: const Icon(Icons.menu),
         ),
       ],
+    );
+  }
+
+  Future<void> _openShareOptionsSheet(
+    BuildContext context, {
+    required String url,
+    required String title,
+  }) async {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
+    final text = Uri.encodeComponent('Check this out: $cleanUrl');
+    final smsBody = Uri.encodeComponent('Check this out: $cleanUrl');
+    final emailSubject = Uri.encodeComponent('Shared from DaycareFinder');
+    final emailBody = Uri.encodeComponent('Take a look:\n$cleanUrl');
+
+    Future<void> launchOrCopy(Uri uri) async {
+      final ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!ok) {
+        await Clipboard.setData(ClipboardData(text: cleanUrl));
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          this.context,
+        ).showSnackBar(SnackBar(content: Text('Link copied: $cleanUrl')));
+      }
+    }
+
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: Text('Share $title'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_outlined),
+                title: const Text('WhatsApp'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await launchOrCopy(Uri.parse('https://wa.me/?text=$text'));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sms_outlined),
+                title: const Text('Text Message'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await launchOrCopy(Uri.parse('sms:?body=$smsBody'));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.email_outlined),
+                title: const Text('Email'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await launchOrCopy(
+                    Uri.parse('mailto:?subject=$emailSubject&body=$emailBody'),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Copy Link'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await Clipboard.setData(ClipboardData(text: cleanUrl));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(content: Text('Link copied: $cleanUrl')),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -158,7 +262,7 @@ class _SiteFooter extends StatelessWidget {
               'Powered by Liisgo Daycare System',
               style: textTheme.bodySmall,
             ),
-            Text('Version 1.0.26+41', style: textTheme.bodySmall),
+            Text('Version 1.0.26+61', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -219,7 +323,7 @@ class _SiteFooter extends StatelessWidget {
               '© 2026 Daycare.com. All rights reserved.',
               style: textTheme.bodySmall,
             ),
-            Text('Version 1.0.26+41', style: textTheme.bodySmall),
+            Text('Version 1.0.26+61', style: textTheme.bodySmall),
           ],
         ),
       ],
