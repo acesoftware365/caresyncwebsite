@@ -16,9 +16,13 @@ class DirectorySearchPage extends StatefulWidget {
   State<DirectorySearchPage> createState() => _DirectorySearchPageState();
 }
 
-class _DirectorySearchPageState extends State<DirectorySearchPage> {
+class _DirectorySearchPageState extends State<DirectorySearchPage>
+    with WidgetsBindingObserver {
   late final DaycareDirectoryService svc;
   Stream<List<DaycarePublic>>? resultsStream;
+  final ScrollController _searchScrollController = ScrollController(
+    keepScrollOffset: false,
+  );
 
   final nameCtrl = TextEditingController();
   final cityCtrl = TextEditingController();
@@ -28,10 +32,16 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
 
   String state2 = '';
   String languageValue = '';
+  double _diagLastOffset = 0;
+  DateTime? _diagLastEventAt;
+  DateTime? _diagLastLogAt;
+  DateTime? _diagLastMetricsLogAt;
+  DateTime? _diagLastUpdateLogAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     svc = DaycareDirectoryService(FirebaseFirestore.instance);
 
     nameCtrl.text = widget.query['name'] ?? '';
@@ -50,12 +60,83 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchScrollController.dispose();
     nameCtrl.dispose();
     cityCtrl.dispose();
     zipCtrl.dispose();
     licenseCtrl.dispose();
     capacityCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    final now = DateTime.now();
+    if (_diagLastMetricsLogAt != null &&
+        now.difference(_diagLastMetricsLogAt!).inMilliseconds < 450) {
+      return;
+    }
+    _diagLastMetricsLogAt = now;
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.views.first;
+      final dpr = view.devicePixelRatio;
+      final size = view.physicalSize;
+      final logicalW = (size.width / dpr).toStringAsFixed(1);
+      final logicalH = (size.height / dpr).toStringAsFixed(1);
+      print(
+        '[scroll-diag][search][metrics] viewport=${logicalW}x$logicalH dpr=${dpr.toStringAsFixed(2)}',
+      );
+    } catch (e) {
+      print('[scroll-diag][search][metrics][error] $e');
+    }
+  }
+
+  bool _handleSearchScrollNotification(ScrollNotification notification) {
+    try {
+      if (notification is ScrollStartNotification) {
+        final focus = FocusManager.instance.primaryFocus;
+        if (focus != null && focus.hasFocus) {
+          focus.unfocus();
+        }
+      }
+
+      if (notification is ScrollUpdateNotification ||
+          notification is UserScrollNotification) {
+        final now = DateTime.now();
+        final offset = notification.metrics.pixels;
+        final elapsedMs = _diagLastEventAt == null
+            ? 0
+            : now.difference(_diagLastEventAt!).inMilliseconds;
+        final delta = offset - _diagLastOffset;
+        if (_diagLastUpdateLogAt == null ||
+            now.difference(_diagLastUpdateLogAt!).inMilliseconds > 140) {
+          _diagLastUpdateLogAt = now;
+          print(
+            '[scroll-diag][search][update] offset=${offset.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)} ms=$elapsedMs min=${notification.metrics.minScrollExtent.toStringAsFixed(1)} max=${notification.metrics.maxScrollExtent.toStringAsFixed(1)}',
+          );
+        }
+        final jumpUp = delta < -120 && elapsedMs > 0 && elapsedMs < 260;
+        final jumpDown = delta > 220 && elapsedMs > 0 && elapsedMs < 260;
+
+        if (jumpUp || jumpDown) {
+          if (_diagLastLogAt == null ||
+              now.difference(_diagLastLogAt!).inMilliseconds > 650) {
+            _diagLastLogAt = now;
+            final dir = jumpUp ? 'UP' : 'DOWN';
+            print(
+              '[scroll-diag][search][jump-$dir] offset=${offset.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)} ms=$elapsedMs',
+            );
+          }
+        }
+
+        _diagLastOffset = offset;
+        _diagLastEventAt = now;
+      }
+    } catch (e) {
+      print('[scroll-diag][search][error] $e');
+    }
+    return false;
   }
 
   @override
@@ -123,109 +204,191 @@ class _DirectorySearchPageState extends State<DirectorySearchPage> {
             .trim();
         final palette = _finderPalettes[paletteId] ?? _finderPalettes['blush']!;
 
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1100),
-            child: ListView(
-              padding: const EdgeInsets.all(18),
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [
-                        palette.sixty,
-                        Color.lerp(palette.sixty, palette.thirty, 0.55)!,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    border: Border.all(color: palette.thirty.withAlpha(170)),
-                  ),
-                  child: Text(
-                    'Use filters to quickly find the best daycare fit for your family.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                _FiltersCard(
-                  nameCtrl: nameCtrl,
-                  cityCtrl: cityCtrl,
-                  zipCtrl: zipCtrl,
-                  state2: state2,
-                  palette: palette,
-                  onStateChanged: (v) => setState(() => state2 = v),
-                  languageValue: languageValue,
-                  onLanguageChanged: (v) => setState(() => languageValue = v),
-                  licenseCtrl: licenseCtrl,
-                  capacityCtrl: capacityCtrl,
-                  onSearch: () {
-                    _applyToUrl();
-                    _runSearch();
-                  },
-                  onClear: () {
-                    nameCtrl.clear();
-                    cityCtrl.clear();
-                    zipCtrl.clear();
-                    licenseCtrl.clear();
-                    setState(() => languageValue = '');
-                    capacityCtrl.clear();
-                    setState(() => state2 = '');
-                    context.go('/search');
-                    _runSearch();
-                  },
-                ),
-                const SizedBox(height: 14),
-                StreamBuilder<List<DaycarePublic>>(
-                  stream: resultsStream,
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    final items = snap.data ?? const [];
-                    if (items.isEmpty) {
-                      return Card(
-                        color: palette.sixty.withAlpha(185),
-                        child: const Padding(
-                          padding: EdgeInsets.all(16),
+        final compact = MediaQuery.sizeOf(context).width < 900;
+        return Stack(
+          children: [
+            Center(
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleSearchScrollNotification,
+                    child: ListView(
+                      controller: _searchScrollController,
+                      physics: const ClampingScrollPhysics(),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.all(18),
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            gradient: LinearGradient(
+                              colors: [
+                                palette.sixty,
+                                Color.lerp(
+                                  palette.sixty,
+                                  palette.thirty,
+                                  0.55,
+                                )!,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(
+                              color: palette.thirty.withAlpha(170),
+                            ),
+                          ),
                           child: Text(
-                            'No results found. Try different filters.',
+                            'Use filters to quickly find the best daycare fit for your family.',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
-                      );
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${items.length} results',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        _FiltersCard(
+                          nameCtrl: nameCtrl,
+                          cityCtrl: cityCtrl,
+                          zipCtrl: zipCtrl,
+                          state2: state2,
+                          palette: palette,
+                          onStateChanged: (v) => setState(() => state2 = v),
+                          languageValue: languageValue,
+                          onLanguageChanged: (v) =>
+                              setState(() => languageValue = v),
+                          licenseCtrl: licenseCtrl,
+                          capacityCtrl: capacityCtrl,
+                          onSearch: () {
+                            _applyToUrl();
+                            _runSearch();
+                          },
+                          onClear: () {
+                            nameCtrl.clear();
+                            cityCtrl.clear();
+                            zipCtrl.clear();
+                            licenseCtrl.clear();
+                            setState(() => languageValue = '');
+                            capacityCtrl.clear();
+                            setState(() => state2 = '');
+                            context.go('/search');
+                            _runSearch();
+                          },
                         ),
-                        const SizedBox(height: 10),
-                        ...items.map(
-                          (x) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: DaycareCard(
-                              item: x,
-                              onTap: () =>
-                                  context.push('/daycare/${x.effectiveSlug}'),
+                        const SizedBox(height: 14),
+                        StreamBuilder<List<DaycarePublic>>(
+                          stream: resultsStream,
+                          builder: (context, snap) {
+                            if (snap.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Padding(
+                                padding: EdgeInsets.all(24),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+                            final items = snap.data ?? const [];
+                            if (items.isEmpty) {
+                              return Card(
+                                color: palette.sixty.withAlpha(185),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                    'No results found. Try different filters.',
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${items.length} results',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 10),
+                                ...items.map(
+                                  (x) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: DaycareCard(
+                                      item: x,
+                                      onTap: () => context.push(
+                                        '/daycare/${x.effectiveSlug}',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (compact)
+              Positioned(
+                right: 16,
+                bottom: 20,
+                child: ListenableBuilder(
+                  listenable: _searchScrollController,
+                  builder: (context, _) {
+                    final hasClients = _searchScrollController.hasClients;
+                    final show =
+                        hasClients && _searchScrollController.offset > 220;
+                    return IgnorePointer(
+                      ignoring: !show,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: show ? 1 : 0,
+                        child: SafeArea(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(120),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: FloatingActionButton.small(
+                              heroTag: 'search_scroll_top_fab',
+                              backgroundColor: palette.accent,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              highlightElevation: 0,
+                              hoverElevation: 0,
+                              onPressed: () {
+                                if (!_searchScrollController.hasClients) return;
+                                _searchScrollController.animateTo(
+                                  0,
+                                  duration: const Duration(milliseconds: 320),
+                                  curve: Curves.easeOutCubic,
+                                );
+                              },
+                              child: const Icon(
+                                Icons.arrow_upward_rounded,
+                                size: 30,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
-                      ],
+                      ),
                     );
                   },
                 ),
-              ],
-            ),
-          ),
+              ),
+          ],
         );
       },
     );

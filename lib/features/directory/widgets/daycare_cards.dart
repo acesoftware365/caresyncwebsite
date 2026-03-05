@@ -3,6 +3,13 @@ import '../models/daycare_public.dart';
 import '../../../services/image_url.dart';
 import '../../../widgets/smart_network_image.dart';
 
+List<BoxShadow> _daycareCardShadow(BuildContext context) {
+  final shadowColor = Theme.of(context).colorScheme.shadow.withAlpha(28);
+  return [
+    BoxShadow(color: shadowColor, blurRadius: 18, offset: const Offset(0, 8)),
+  ];
+}
+
 class DaycareCard extends StatelessWidget {
   const DaycareCard({super.key, required this.item, this.onTap});
   final DaycarePublic item;
@@ -13,79 +20,81 @@ class DaycareCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ResultThumb(
-                heroUrl: item.heroUrl,
-                logoUrl: item.logoUrl,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _daycareCardShadow(context),
+        ),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ResultThumb(heroUrl: item.heroUrl, logoUrl: item.logoUrl),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant.withAlpha(200),
                           ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 16,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withAlpha(200),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            '${item.city}${item.city.isNotEmpty && item.state.isNotEmpty ? ', ' : ''}${item.state}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${item.city}${item.city.isNotEmpty && item.state.isNotEmpty ? ', ' : ''}${item.state}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (item.capacity > 0) _Chip(text: 'Capacity ${item.capacity}'),
-                        if (item.licenseNumber.trim().isNotEmpty)
-                          _Chip(text: 'License ${item.licenseNumber}'),
-                        if (item.languages.isNotEmpty)
-                          _Chip(text: item.languages.take(2).join(' • ')),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (item.capacity > 0)
+                            _Chip(text: 'Capacity ${item.capacity}'),
+                          if (item.licenseNumber.trim().isNotEmpty)
+                            _Chip(text: 'License ${item.licenseNumber}'),
+                          if (item.languages.isNotEmpty)
+                            _Chip(text: item.languages.take(2).join(' • ')),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withAlpha(28),
-                  shape: BoxShape.circle,
+                const SizedBox(width: 10),
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withAlpha(28),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary.withAlpha(220),
+                  ),
                 ),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary.withAlpha(220),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -94,10 +103,7 @@ class DaycareCard extends StatelessWidget {
 }
 
 class _ResultThumb extends StatelessWidget {
-  const _ResultThumb({
-    required this.heroUrl,
-    required this.logoUrl,
-  });
+  const _ResultThumb({required this.heroUrl, required this.logoUrl});
 
   final String heroUrl;
   final String logoUrl;
@@ -149,48 +155,80 @@ class FeaturedTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
-      child: Card(
-        child: ClipRRect(
+      child: Container(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: MediaQuery.sizeOf(context).width < 480 ? 130 : 120,
-                width: double.infinity,
-                child: hero.isEmpty
-                    ? Container(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: const Center(child: Icon(Icons.photo, size: 28)),
-                      )
-                    : SmartNetworkImage(
-                        urls: candidateImageUrls(hero),
-                        fit: BoxFit.cover,
-                        placeholder: Container(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+          boxShadow: _daycareCardShadow(context),
+        ),
+        child: Card(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: MediaQuery.sizeOf(context).width < 480 ? 130 : 120,
+                  width: double.infinity,
+                  child: hero.isEmpty
+                      ? Container(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          child: const Center(
+                            child: Icon(Icons.photo, size: 28),
+                          ),
+                        )
+                      : SmartNetworkImage(
+                          urls: candidateImageUrls(hero),
+                          fit: BoxFit.cover,
+                          placeholder: Container(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                          fallback: Container(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                size: 28,
+                              ),
+                            ),
+                          ),
                         ),
-                        fallback: Container(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: const Center(child: Icon(Icons.broken_image_outlined, size: 28)),
-                        ),
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item.city}${item.city.isNotEmpty && item.state.isNotEmpty ? ', ' : ''}${item.state}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.city}${item.city.isNotEmpty && item.state.isNotEmpty ? ', ' : ''}${item.state}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -208,16 +246,27 @@ class StateTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              const Icon(Icons.map_outlined),
-              const SizedBox(width: 10),
-              Expanded(child: Text(state2, style: Theme.of(context).textTheme.titleMedium)),
-              const Icon(Icons.chevron_right),
-            ],
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _daycareCardShadow(context),
+        ),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                const Icon(Icons.map_outlined),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    state2,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
           ),
         ),
       ),
@@ -240,9 +289,9 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
       ),
     );
   }

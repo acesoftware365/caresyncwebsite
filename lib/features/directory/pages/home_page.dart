@@ -21,8 +21,14 @@ class DirectoryHomePage extends StatefulWidget {
   State<DirectoryHomePage> createState() => _DirectoryHomePageState();
 }
 
-class _DirectoryHomePageState extends State<DirectoryHomePage> {
+class _DirectoryHomePageState extends State<DirectoryHomePage>
+    with WidgetsBindingObserver {
+  static const int _homePreviewLimit = 4;
+
   late final DaycareDirectoryService svc;
+  final ScrollController _homeScrollController = ScrollController(
+    keepScrollOffset: false,
+  );
 
   final quickName = TextEditingController();
   final quickCity = TextEditingController();
@@ -35,24 +41,103 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
   bool locating = false;
   String locationHintMessage = '';
   Future<List<DaycarePublic>>? inlineResultsFuture;
+  Future<List<DaycarePublic>>? featuredItemsFuture;
   String inlineResultsTitle = 'All Daycares';
+  double _diagLastOffset = 0;
+  DateTime? _diagLastEventAt;
+  DateTime? _diagLastLogAt;
+  DateTime? _diagLastMetricsLogAt;
+  DateTime? _diagLastUpdateLogAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     svc = DaycareDirectoryService(FirebaseFirestore.instance);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsEventLogger.log(eventType: 'page_view_home', pageType: 'home');
     });
+    featuredItemsFuture = _buildFeaturedItems();
     _restoreSavedLocation();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     quickName.dispose();
     quickCity.dispose();
     quickZip.dispose();
+    _homeScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    final now = DateTime.now();
+    if (_diagLastMetricsLogAt != null &&
+        now.difference(_diagLastMetricsLogAt!).inMilliseconds < 450) {
+      return;
+    }
+    _diagLastMetricsLogAt = now;
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.views.first;
+      final dpr = view.devicePixelRatio;
+      final size = view.physicalSize;
+      final logicalW = (size.width / dpr).toStringAsFixed(1);
+      final logicalH = (size.height / dpr).toStringAsFixed(1);
+      print(
+        '[scroll-diag][home][metrics] viewport=${logicalW}x$logicalH dpr=${dpr.toStringAsFixed(2)}',
+      );
+    } catch (e) {
+      print('[scroll-diag][home][metrics][error] $e');
+    }
+  }
+
+  bool _handleHomeScrollNotification(ScrollNotification notification) {
+    try {
+      if (notification is ScrollStartNotification) {
+        final focus = FocusManager.instance.primaryFocus;
+        if (focus != null && focus.hasFocus) {
+          focus.unfocus();
+        }
+      }
+
+      if (notification is ScrollUpdateNotification ||
+          notification is UserScrollNotification) {
+        final now = DateTime.now();
+        final offset = notification.metrics.pixels;
+        final elapsedMs = _diagLastEventAt == null
+            ? 0
+            : now.difference(_diagLastEventAt!).inMilliseconds;
+        final delta = offset - _diagLastOffset;
+        if (_diagLastUpdateLogAt == null ||
+            now.difference(_diagLastUpdateLogAt!).inMilliseconds > 140) {
+          _diagLastUpdateLogAt = now;
+          print(
+            '[scroll-diag][home][update] offset=${offset.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)} ms=$elapsedMs min=${notification.metrics.minScrollExtent.toStringAsFixed(1)} max=${notification.metrics.maxScrollExtent.toStringAsFixed(1)}',
+          );
+        }
+        final jumpUp = delta < -120 && elapsedMs > 0 && elapsedMs < 260;
+        final jumpDown = delta > 220 && elapsedMs > 0 && elapsedMs < 260;
+
+        if (jumpUp || jumpDown) {
+          if (_diagLastLogAt == null ||
+              now.difference(_diagLastLogAt!).inMilliseconds > 650) {
+            _diagLastLogAt = now;
+            final dir = jumpUp ? 'UP' : 'DOWN';
+            print(
+              '[scroll-diag][home][jump-$dir] offset=${offset.toStringAsFixed(1)} delta=${delta.toStringAsFixed(1)} ms=$elapsedMs title=$inlineResultsTitle showInline=$showInlineResults',
+            );
+          }
+        }
+
+        _diagLastOffset = offset;
+        _diagLastEventAt = now;
+      }
+    } catch (e) {
+      print('[scroll-diag][home][error] $e');
+    }
+    return false;
   }
 
   void _goSearch({
@@ -67,13 +152,6 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     final c = normalizeCity(city ?? quickCity.text);
     final z = (zip ?? quickZip.text).trim();
     final l = (language ?? quickLanguage).trim();
-    final filters = DaycareSearchFilters(
-      name: n,
-      state: st,
-      city: c,
-      zip: z,
-      language: l,
-    );
     AnalyticsEventLogger.log(
       eventType: 'click_home_search',
       pageType: 'home',
@@ -81,12 +159,18 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     );
     setState(() {
       inlineResultsTitle = 'All Daycares';
-      showInlineResults = true;
+      showInlineResults = false;
       preferNearbyFeatured = false;
-      inlineResultsFuture = svc
-          .search(filters)
-          .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+      inlineResultsFuture = null;
+      featuredItemsFuture = _buildFeaturedItems();
     });
+    final qp = <String, String>{};
+    if (n.isNotEmpty) qp['name'] = n;
+    if (st.isNotEmpty) qp['state'] = st;
+    if (c.isNotEmpty) qp['city'] = c;
+    if (z.isNotEmpty) qp['zip'] = z;
+    if (l.isNotEmpty) qp['language'] = l;
+    context.go(Uri(path: '/search', queryParameters: qp).toString());
   }
 
   void _toggleSearchPanel() {
@@ -107,6 +191,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
               ),
             )
             .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+        featuredItemsFuture = _buildFeaturedItems();
       }
     });
   }
@@ -195,7 +280,7 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
   Future<List<DaycarePublic>> _buildFeaturedItems() async {
     if (preferNearbyFeatured && inlineResultsFuture != null) {
       final nearby = await inlineResultsFuture!;
-      return _rankNearbyFeatured(nearby).take(3).toList();
+      return _rankNearbyFeatured(nearby).take(_homePreviewLimit).toList();
     }
 
     if (_hasLocationContext) {
@@ -203,8 +288,8 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
           .search(_locationContextFilters())
           .timeout(const Duration(seconds: 12), onTimeout: () => const []);
       final rankedNearby = _rankContextFeatured(nearby);
-      if (rankedNearby.length >= 3) {
-        return rankedNearby.take(3).toList();
+      if (rankedNearby.length >= _homePreviewLimit) {
+        return rankedNearby.take(_homePreviewLimit).toList();
       }
 
       final fallback = await svc
@@ -216,12 +301,28 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
           (item) => !rankedNearby.any((x) => x.tenantId == item.tenantId),
         ),
       ];
-      return merged.take(3).toList();
+      return merged.take(_homePreviewLimit).toList();
     }
 
     return svc
-        .featured(limit: 3)
+        .featured(limit: _homePreviewLimit)
         .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+  }
+
+  Map<String, String> _currentSearchQueryParameters() {
+    final qp = <String, String>{};
+    final name = quickName.text.trim();
+    final city = normalizeCity(quickCity.text);
+    final zip = quickZip.text.trim();
+    final state = normalizeStateCode(quickState);
+    final language = quickLanguage.trim();
+
+    if (name.isNotEmpty) qp['name'] = name;
+    if (city.isNotEmpty) qp['city'] = city;
+    if (zip.isNotEmpty) qp['zip'] = zip;
+    if (state.isNotEmpty) qp['state'] = state;
+    if (language.isNotEmpty) qp['language'] = language;
+    return qp;
   }
 
   Future<void> _useMyLocation() async {
@@ -255,15 +356,33 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
       );
 
       final filters = DaycareSearchFilters(city: city, state: stateCode);
+      final compact = MediaQuery.sizeOf(context).width < 900;
       setState(() {
         filtersExpanded = false;
-        inlineResultsTitle = 'Near You';
-        showInlineResults = true;
-        preferNearbyFeatured = true;
-        inlineResultsFuture = svc
-            .search(filters)
-            .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+        if (compact) {
+          // On iPhone/mobile, avoid injecting Near You inline content
+          // into Home while scrolling. Route to Search screen instead.
+          inlineResultsTitle = 'All Daycares';
+          showInlineResults = false;
+          preferNearbyFeatured = false;
+          inlineResultsFuture = null;
+        } else {
+          inlineResultsTitle = 'Near You';
+          showInlineResults = true;
+          preferNearbyFeatured = true;
+          inlineResultsFuture = svc
+              .search(filters)
+              .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+        }
+        featuredItemsFuture = _buildFeaturedItems();
       });
+      if (compact && mounted) {
+        final qp = <String, String>{};
+        if (city.isNotEmpty) qp['city'] = city;
+        if (stateCode.isNotEmpty) qp['state'] = stateCode;
+        if (zip.isNotEmpty) qp['zip'] = zip;
+        context.go(Uri(path: '/search', queryParameters: qp).toString());
+      }
       await saveHomeLocation(
         SavedHomeLocation(city: city, state: stateCode, zip: zip),
       );
@@ -307,14 +426,13 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
         stateCode,
         zip,
       ].where((e) => e.trim().isNotEmpty).join(', ');
-
+      // Keep restored location in filters, but avoid injecting new async
+      // results while the user is actively scrolling.
       filtersExpanded = false;
-      inlineResultsTitle = 'Near You';
-      showInlineResults = true;
-      preferNearbyFeatured = true;
-      inlineResultsFuture = svc
-          .search(DaycareSearchFilters(city: city, state: stateCode))
-          .timeout(const Duration(seconds: 12), onTimeout: () => const []);
+      if (!showInlineResults) {
+        inlineResultsTitle = 'All Daycares';
+        preferNearbyFeatured = false;
+      }
     });
   }
 
@@ -327,45 +445,101 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: cfgStream,
       builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+          );
+        }
         final data = snap.data?.data() ?? <String, dynamic>{};
         final config = _FinderConfig.fromMap(data);
         final palette =
             _finderPalettes[config.palette] ?? _finderPalettes['blush']!;
         final promos = config.promos.where((e) => e.enabled).toList();
 
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1100),
-            child: ListView(
-              padding: const EdgeInsets.all(18),
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [
-                        palette.sixty,
-                        Color.lerp(palette.sixty, palette.thirty, 0.55)!,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    border: Border.all(color: palette.thirty.withAlpha(170)),
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      final compact = c.maxWidth < 760;
-                      if (compact) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+        final compact = MediaQuery.sizeOf(context).width < 900;
+        return Stack(
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _handleHomeScrollNotification,
+                  child: ListView(
+                    controller: _homeScrollController,
+                    physics: const ClampingScrollPhysics(),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.all(18),
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(
+                            colors: [
+                              palette.sixty,
+                              Color.lerp(palette.sixty, palette.thirty, 0.55)!,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(
+                            color: palette.thirty.withAlpha(170),
+                          ),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, c) {
+                            final compact = c.maxWidth < 760;
+                            if (compact) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 38,
+                                        height: 38,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withAlpha(210),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.family_restroom_outlined,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Discover trusted daycare programs near you.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Row(
                               children: [
                                 Container(
-                                  width: 38,
-                                  height: 38,
+                                  width: 42,
+                                  height: 42,
                                   decoration: BoxDecoration(
                                     color: Colors.white.withAlpha(210),
                                     borderRadius: BorderRadius.circular(12),
@@ -384,332 +558,387 @@ class _DirectoryHomePageState extends State<DirectoryHomePage> {
                                         ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
                                 ),
+                                const SizedBox(width: 12),
+                                FilledButton.tonalIcon(
+                                  onPressed: () {
+                                    AnalyticsEventLogger.log(
+                                      eventType: 'click_share_home_button',
+                                      pageType: 'home',
+                                    );
+                                    _openShareOptionsSheet(
+                                      context,
+                                      url: 'https://daycarefinder.web.app',
+                                      title: 'DaycareFinder',
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.link_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Share Website'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.white.withAlpha(
+                                      210,
+                                    ),
+                                    foregroundColor: palette.accent,
+                                    side: BorderSide(
+                                      color: palette.accent.withAlpha(90),
+                                    ),
+                                  ),
+                                ),
                               ],
-                            ),
-                          ],
-                        );
-                      }
-
-                      return Row(
+                            );
+                          },
+                        ),
+                      ),
+                      _Hero(
+                        palette: palette,
+                        nameCtrl: quickName,
+                        cityCtrl: quickCity,
+                        zipCtrl: quickZip,
+                        language: quickLanguage,
+                        onLanguageChanged: (v) =>
+                            setState(() => quickLanguage = v),
+                        state2: quickState,
+                        onStateChanged: (v) => setState(() => quickState = v),
+                        onToggleFilters: _toggleSearchPanel,
+                        onSearch: _goSearch,
+                        filtersExpanded: filtersExpanded,
+                        onUseMyLocation: _useMyLocation,
+                        locating: locating,
+                        locationHintMessage: locationHintMessage,
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
                         children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withAlpha(210),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.family_restroom_outlined),
+                          Text(
+                            'Featured Daycares',
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Discover trusted daycare programs near you.',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton.tonalIcon(
+                          const Spacer(),
+                          TextButton(
                             onPressed: () {
-                              AnalyticsEventLogger.log(
-                                eventType: 'click_share_home_button',
-                                pageType: 'home',
-                              );
-                              _openShareOptionsSheet(
-                                context,
-                                url: 'https://daycarefinder.web.app',
-                                title: 'DaycareFinder',
+                              context.go(
+                                Uri(
+                                  path: '/search',
+                                  queryParameters:
+                                      _currentSearchQueryParameters(),
+                                ).toString(),
                               );
                             },
-                            icon: const Icon(Icons.link_rounded, size: 18),
-                            label: const Text('Share Website'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white.withAlpha(210),
-                              foregroundColor: palette.accent,
-                              side: BorderSide(
-                                color: palette.accent.withAlpha(90),
-                              ),
-                            ),
+                            child: const Text('Show all'),
                           ),
                         ],
-                      );
-                    },
-                  ),
-                ),
-                _Hero(
-                  palette: palette,
-                  nameCtrl: quickName,
-                  cityCtrl: quickCity,
-                  zipCtrl: quickZip,
-                  language: quickLanguage,
-                  onLanguageChanged: (v) => setState(() => quickLanguage = v),
-                  state2: quickState,
-                  onStateChanged: (v) => setState(() => quickState = v),
-                  onToggleFilters: _toggleSearchPanel,
-                  onSearch: _goSearch,
-                  filtersExpanded: filtersExpanded,
-                  onUseMyLocation: _useMyLocation,
-                  locating: locating,
-                  locationHintMessage: locationHintMessage,
-                ),
-                if (promos.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  _PromoSection(
-                    promos: promos,
-                    rotationSecondsLarge: config.promoRotationSeconds,
-                    rotationSecondsSmall: config.promoRotationSecondsSmall,
-                    onOpenUrl: _openExternalUrl,
-                    palette: palette,
-                  ),
-                ],
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Text(
-                      'Featured Daycares',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () {
-                        if (!filtersExpanded) {
-                          setState(() => filtersExpanded = true);
-                        }
-                        _goSearch();
-                      },
-                      child: const Text('View all'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                FutureBuilder<List<DaycarePublic>>(
-                  future: _buildFeaturedItems(),
-                  builder: (context, snap) {
-                    if (snap.hasError) {
-                      return Card(
-                        color: palette.sixty.withAlpha(190),
-                        child: const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text(
-                            'Could not load featured daycares right now.',
-                          ),
-                        ),
-                      );
-                    }
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    final items = snap.data ?? [];
-                    if (items.isEmpty) {
-                      return Card(
-                        color: palette.sixty.withAlpha(190),
-                        child: const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text('No featured daycares yet.'),
-                        ),
-                      );
-                    }
+                      ),
+                      const SizedBox(height: 10),
+                      FutureBuilder<List<DaycarePublic>>(
+                        future: featuredItemsFuture ?? _buildFeaturedItems(),
+                        builder: (context, snap) {
+                          if (snap.hasError) {
+                            return Card(
+                              color: palette.sixty.withAlpha(190),
+                              child: const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text(
+                                  'Could not load featured daycares right now.',
+                                ),
+                              ),
+                            );
+                          }
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: SizedBox(
+                                height: 230,
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                            );
+                          }
+                          final items = snap.data ?? [];
+                          if (items.isEmpty) {
+                            return Card(
+                              color: palette.sixty.withAlpha(190),
+                              child: const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text('No featured daycares yet.'),
+                              ),
+                            );
+                          }
 
-                    return LayoutBuilder(
-                      builder: (context, c) {
-                        final isMobile = c.maxWidth < 640;
+                          return LayoutBuilder(
+                            builder: (context, c) {
+                              final isMobile = c.maxWidth < 640;
 
-                        Widget buildFeaturedTile(DaycarePublic x) {
-                          return FeaturedTile(
-                            item: x,
-                            onTap: () {
-                              AnalyticsEventLogger.log(
-                                eventType: 'click_featured_daycare',
-                                pageType: 'home',
-                                tenantId: x.tenantId,
-                                slug: x.effectiveSlug,
-                                data: {'name': x.name},
+                              Widget buildFeaturedTile(DaycarePublic x) {
+                                return FeaturedTile(
+                                  item: x,
+                                  onTap: () {
+                                    AnalyticsEventLogger.log(
+                                      eventType: 'click_featured_daycare',
+                                      pageType: 'home',
+                                      tenantId: x.tenantId,
+                                      slug: x.effectiveSlug,
+                                      data: {'name': x.name},
+                                    );
+                                    context.push('/daycare/${x.effectiveSlug}');
+                                  },
+                                );
+                              }
+
+                              if (isMobile) {
+                                final cardWidth = c.maxWidth
+                                    .clamp(220.0, 280.0)
+                                    .toDouble();
+                                return SizedBox(
+                                  height: 230,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: items.length,
+                                    separatorBuilder: (_, index) =>
+                                        const SizedBox(width: 12),
+                                    itemBuilder: (_, i) => SizedBox(
+                                      width: cardWidth,
+                                      child: buildFeaturedTile(items[i]),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final cols = c.maxWidth > 900 ? 4 : 2;
+                              return GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: items.length,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: cols,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 1.35,
+                                    ),
+                                itemBuilder: (_, i) =>
+                                    buildFeaturedTile(items[i]),
                               );
-                              context.push('/daycare/${x.effectiveSlug}');
                             },
                           );
-                        }
-
-                        if (isMobile) {
-                          final cardWidth = c.maxWidth
-                              .clamp(220.0, 280.0)
-                              .toDouble();
-                          return SizedBox(
-                            height: 230,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: items.length,
-                              separatorBuilder: (_, index) =>
-                                  const SizedBox(width: 12),
-                              itemBuilder: (_, i) => SizedBox(
-                                width: cardWidth,
-                                child: buildFeaturedTile(items[i]),
+                        },
+                      ),
+                      if (showInlineResults) ...[
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Text(
+                              inlineResultsTitle,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const Spacer(),
+                            if (!compact)
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    showInlineResults = false;
+                                    preferNearbyFeatured = false;
+                                    featuredItemsFuture = _buildFeaturedItems();
+                                  });
+                                },
+                                child: const Text('Hide'),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        FutureBuilder<List<DaycarePublic>>(
+                          future:
+                              inlineResultsFuture ??
+                              svc
+                                  .search(
+                                    DaycareSearchFilters(
+                                      name: quickName.text.trim(),
+                                      city: quickCity.text.trim(),
+                                      state: quickState,
+                                      zip: quickZip.text.trim(),
+                                      language: quickLanguage,
+                                    ),
+                                  )
+                                  .timeout(
+                                    const Duration(seconds: 12),
+                                    onTimeout: () => const [],
+                                  ),
+                          builder: (context, snap) {
+                            if (snap.hasError) {
+                              return Card(
+                                color: palette.sixty.withAlpha(190),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                    'Could not load nearby daycares. Please try again.',
+                                  ),
+                                ),
+                              );
+                            }
+                            final items = snap.data ?? const <DaycarePublic>[];
+                            if (snap.connectionState ==
+                                ConnectionState.waiting) {
+                              return SizedBox(
+                                height: 460,
+                                child: Center(
+                                  child: Card(
+                                    color: palette.sixty.withAlpha(190),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(16),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'Loading nearby daycares...',
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (items.isEmpty) {
+                              return Card(
+                                color: palette.sixty.withAlpha(190),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                    'No daycares matched this search yet.',
+                                  ),
+                                ),
+                              );
+                            }
+                            final previewItems = items
+                                .take(_homePreviewLimit)
+                                .toList();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${items.length} results',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                    const Spacer(),
+                                    TextButton(
+                                      onPressed: () {
+                                        context.go(
+                                          Uri(
+                                            path: '/search',
+                                            queryParameters:
+                                                _currentSearchQueryParameters(),
+                                          ).toString(),
+                                        );
+                                      },
+                                      child: const Text('Show all'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                ...previewItems.map(
+                                  (x) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: DaycareCard(
+                                      item: x,
+                                      onTap: () => context.push(
+                                        '/daycare/${x.effectiveSlug}',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                      if (promos.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _PromoSection(
+                          promos: promos,
+                          rotationSecondsLarge: config.promoRotationSeconds,
+                          rotationSecondsSmall:
+                              config.promoRotationSecondsSmall,
+                          onOpenUrl: _openExternalUrl,
+                          palette: palette,
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (compact)
+              Positioned(
+                right: 16,
+                bottom: 20,
+                child: ListenableBuilder(
+                  listenable: _homeScrollController,
+                  builder: (context, _) {
+                    final hasClients = _homeScrollController.hasClients;
+                    final show =
+                        hasClients && _homeScrollController.offset > 220;
+                    return IgnorePointer(
+                      ignoring: !show,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: show ? 1 : 0,
+                        child: SafeArea(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(120),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: FloatingActionButton.small(
+                              heroTag: 'home_scroll_top_fab',
+                              backgroundColor: palette.accent,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              highlightElevation: 0,
+                              hoverElevation: 0,
+                              onPressed: () {
+                                if (!_homeScrollController.hasClients) return;
+                                _homeScrollController.animateTo(
+                                  0,
+                                  duration: const Duration(milliseconds: 320),
+                                  curve: Curves.easeOutCubic,
+                                );
+                              },
+                              child: const Icon(
+                                Icons.arrow_upward_rounded,
+                                size: 30,
+                                color: Colors.white,
                               ),
                             ),
-                          );
-                        }
-
-                        final cols = c.maxWidth > 900 ? 4 : 2;
-                        return GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: items.length,
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: cols,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 1.35,
-                              ),
-                          itemBuilder: (_, i) => buildFeaturedTile(items[i]),
-                        );
-                      },
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
-                if (showInlineResults) ...[
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Text(
-                        inlineResultsTitle,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            showInlineResults = false;
-                            preferNearbyFeatured = false;
-                          });
-                        },
-                        child: const Text('Hide'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  FutureBuilder<List<DaycarePublic>>(
-                    future:
-                        inlineResultsFuture ??
-                        svc
-                            .search(
-                              DaycareSearchFilters(
-                                name: quickName.text.trim(),
-                                city: quickCity.text.trim(),
-                                state: quickState,
-                                zip: quickZip.text.trim(),
-                                language: quickLanguage,
-                              ),
-                            )
-                            .timeout(
-                              const Duration(seconds: 12),
-                              onTimeout: () => const [],
-                            ),
-                    builder: (context, snap) {
-                      if (snap.hasError) {
-                        return Card(
-                          color: palette.sixty.withAlpha(190),
-                          child: const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text(
-                              'Could not load nearby daycares. Please try again.',
-                            ),
-                          ),
-                        );
-                      }
-                      final items = snap.data ?? const <DaycarePublic>[];
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return Card(
-                          color: palette.sixty.withAlpha(190),
-                          child: const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Text('Loading nearby daycares...'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      if (items.isEmpty) {
-                        return Card(
-                          color: palette.sixty.withAlpha(190),
-                          child: const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('No daycares matched this search yet.'),
-                          ),
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${items.length} results',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 10),
-                          ...items.map(
-                            (x) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: DaycareCard(
-                                item: x,
-                                onTap: () =>
-                                    context.push('/daycare/${x.effectiveSlug}'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-                const SizedBox(height: 22),
-                Card(
-                  color: palette.sixty.withAlpha(190),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Wrap(
-                      spacing: 14,
-                      runSpacing: 10,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.verified_user_outlined,
-                          color: palette.accent.withAlpha(220),
-                        ),
-                        const Text(
-                          'Only daycares with websites ready are listed.',
-                        ),
-                        const SizedBox(width: 12),
-                        Icon(
-                          Icons.palette_outlined,
-                          color: palette.accent.withAlpha(220),
-                        ),
-                        const Text(
-                          'Clean, family-friendly browsing experience.',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
+              ),
+          ],
         );
       },
     );
@@ -1292,8 +1521,47 @@ class _PromoSectionState extends State<_PromoSection> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 900;
     final small = widget.promos.where((p) => p.size == 'small').toList();
     final large = widget.promos.where((p) => p.size == 'large').toList();
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (large.isNotEmpty) ...[
+            Text('Highlights', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 360,
+              child: _PromoCardTile(
+                promo: large.first,
+                large: true,
+                onOpenUrl: widget.onOpenUrl,
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          if (small.isNotEmpty) ...[
+            Text(
+              'Highlights',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 520,
+              child: _PromoCardTile(
+                promo: small.first,
+                large: false,
+                onOpenUrl: widget.onOpenUrl,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1327,6 +1595,7 @@ class _PromoSectionState extends State<_PromoSection> {
             key: _largeCarouselKey,
             promos: large,
             rotationSeconds: widget.rotationSecondsLarge,
+            enableAutoRotate: !compact,
             large: true,
             viewportFraction: 1.0,
             onOpenUrl: widget.onOpenUrl,
@@ -1364,6 +1633,7 @@ class _PromoSectionState extends State<_PromoSection> {
             key: _smallCarouselKey,
             promos: small,
             rotationSeconds: widget.rotationSecondsSmall,
+            enableAutoRotate: !compact,
             large: false,
             viewportFraction: MediaQuery.sizeOf(context).width >= 1020
                 ? 0.28
@@ -1381,6 +1651,7 @@ class _PromoCarousel extends StatefulWidget {
     super.key,
     required this.promos,
     required this.rotationSeconds,
+    required this.enableAutoRotate,
     required this.large,
     required this.viewportFraction,
     required this.onOpenUrl,
@@ -1388,6 +1659,7 @@ class _PromoCarousel extends StatefulWidget {
 
   final List<_PromoItem> promos;
   final int rotationSeconds;
+  final bool enableAutoRotate;
   final bool large;
   final double viewportFraction;
   final ValueChanged<String> onOpenUrl;
@@ -1421,6 +1693,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
       old.dispose();
     }
     if (oldWidget.rotationSeconds != widget.rotationSeconds ||
+        oldWidget.enableAutoRotate != widget.enableAutoRotate ||
         oldWidget.promos.length != widget.promos.length) {
       _timer?.cancel();
       _startTimer();
@@ -1435,7 +1708,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   }
 
   void _startTimer() {
-    if (widget.promos.length <= 1) return;
+    if (!widget.enableAutoRotate || widget.promos.length <= 1) return;
     final secs = widget.rotationSeconds.clamp(1, 120);
     _timer = Timer.periodic(Duration(seconds: secs), (_) {
       if (_userInteracting) return;
@@ -1510,9 +1783,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isDesktop = screenWidth >= 1020;
-    final height = widget.large
-        ? 340.0
-        : (isDesktop ? 380.0 : 500.0);
+    final height = widget.large ? 340.0 : (isDesktop ? 380.0 : 500.0);
     final bottomShadowSpace = widget.large ? 22.0 : (isDesktop ? 34.0 : 36.0);
     return Column(
       children: [
@@ -1521,45 +1792,37 @@ class _PromoCarouselState extends State<_PromoCarousel> {
           child: MouseRegion(
             onEnter: (_) => _setInteraction(true),
             onExit: (_) => _setInteraction(false),
-            child: GestureDetector(
-              onPanDown: (_) => _setInteraction(true),
-              onPanEnd: (_) => _setInteraction(false),
-              onPanCancel: () => _setInteraction(false),
-              onTapDown: (_) => _setInteraction(true),
-              onTapUp: (_) => _setInteraction(false),
-              onTapCancel: () => _setInteraction(false),
-              child: Padding(
-                padding: EdgeInsets.only(bottom: bottomShadowSpace),
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification is ScrollStartNotification) {
-                      _setInteraction(true);
-                    } else if (notification is ScrollEndNotification) {
-                      _setInteraction(false);
-                    }
-                    return false;
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomShadowSpace),
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification is ScrollStartNotification) {
+                    _setInteraction(true);
+                  } else if (notification is ScrollEndNotification) {
+                    _setInteraction(false);
+                  }
+                  return false;
+                },
+                child: PageView.builder(
+                  controller: _controller,
+                  clipBehavior: widget.large ? Clip.none : Clip.hardEdge,
+                  padEnds: false,
+                  itemCount: widget.promos.length,
+                  onPageChanged: (v) => setState(() => _index = v),
+                  itemBuilder: (context, i) {
+                    final p = widget.promos[i];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        right: i == widget.promos.length - 1 ? 0 : 6,
+                        bottom: widget.large ? 10 : 24,
+                      ),
+                      child: _PromoCardTile(
+                        promo: p,
+                        large: widget.large,
+                        onOpenUrl: widget.onOpenUrl,
+                      ),
+                    );
                   },
-                  child: PageView.builder(
-                    controller: _controller,
-                    clipBehavior: widget.large ? Clip.none : Clip.hardEdge,
-                    padEnds: false,
-                    itemCount: widget.promos.length,
-                    onPageChanged: (v) => setState(() => _index = v),
-                    itemBuilder: (context, i) {
-                      final p = widget.promos[i];
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          right: i == widget.promos.length - 1 ? 0 : 6,
-                          bottom: widget.large ? 10 : 24,
-                        ),
-                        child: _PromoCardTile(
-                          promo: p,
-                          large: widget.large,
-                          onOpenUrl: widget.onOpenUrl,
-                        ),
-                      );
-                    },
-                  ),
                 ),
               ),
             ),

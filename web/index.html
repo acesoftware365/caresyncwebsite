@@ -31,8 +31,42 @@
 
   <title>caresyncwebsite</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      position: static;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+  </style>
 </head>
 <body>
+  <script>
+    (function () {
+      var lastAt = 0;
+      function log(kind, msg) {
+        var now = Date.now();
+        if (now - lastAt < 120) return;
+        lastAt = now;
+        console.log('[scroll-diag-web][' + kind + '] ' + msg);
+      }
+      window.addEventListener('scroll', function () {
+        log('window-scroll', 'y=' + window.scrollY + ' innerH=' + window.innerHeight);
+      }, { passive: true });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+          log('vv-resize', 'w=' + window.visualViewport.width.toFixed(1) + ' h=' + window.visualViewport.height.toFixed(1) + ' top=' + window.visualViewport.offsetTop.toFixed(1));
+        }, { passive: true });
+        window.visualViewport.addEventListener('scroll', function () {
+          log('vv-scroll', 'top=' + window.visualViewport.offsetTop.toFixed(1) + ' left=' + window.visualViewport.offsetLeft.toFixed(1));
+        }, { passive: true });
+      }
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

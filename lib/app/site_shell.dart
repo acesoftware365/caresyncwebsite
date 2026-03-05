@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+const _publicAppVersion = '1.0.26+92';
+
 class SiteShell extends StatefulWidget {
   const SiteShell({super.key, required this.child});
   final Widget child;
@@ -13,6 +15,12 @@ class SiteShell extends StatefulWidget {
 }
 
 class _SiteShellState extends State<SiteShell> {
+  void _goHomeIfNeeded(BuildContext context) {
+    final currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath == '/') return;
+    context.go('/');
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -63,7 +71,7 @@ class _SiteShellState extends State<SiteShell> {
     return Row(
       children: [
         InkWell(
-          onTap: () => context.go('/'),
+          onTap: () => _goHomeIfNeeded(context),
           child: Text(
             'DaycareFinder.com',
             style: Theme.of(
@@ -82,16 +90,13 @@ class _SiteShellState extends State<SiteShell> {
     return Row(
       children: [
         Expanded(
-          child: InkWell(
-            onTap: () => context.go('/'),
-            child: Text(
-              'DaycareFinder.com',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
+          child: Text(
+            'DaycareFinder.com',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
         FilledButton.tonalIcon(
@@ -262,7 +267,7 @@ class _SiteFooter extends StatelessWidget {
               'Powered by Liisgo Daycare System',
               style: textTheme.bodySmall,
             ),
-            Text('Version 1.0.26+61', style: textTheme.bodySmall),
+            Text('Version $_publicAppVersion', style: textTheme.bodySmall),
           ],
         ),
       ],
@@ -323,7 +328,7 @@ class _SiteFooter extends StatelessWidget {
               '© 2026 Daycare.com. All rights reserved.',
               style: textTheme.bodySmall,
             ),
-            Text('Version 1.0.26+61', style: textTheme.bodySmall),
+            Text('Version $_publicAppVersion', style: textTheme.bodySmall),
           ],
         ),
       ],

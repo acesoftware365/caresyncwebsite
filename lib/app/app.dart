@@ -46,6 +46,7 @@ class DaycareWebsitesApp extends StatelessWidget {
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: 'Daycare Finder',
+          scrollBehavior: const _NoBounceScrollBehavior(),
           theme: buildPublicTheme(
             seed: palette.seed,
             scaffold: palette.scaffold,
@@ -54,6 +55,24 @@ class DaycareWebsitesApp extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _NoBounceScrollBehavior extends MaterialScrollBehavior {
+  const _NoBounceScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
   }
 }
 
