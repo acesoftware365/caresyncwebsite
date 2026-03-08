@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _publicAppVersion = '1.0.26+92';
+const _publicAppVersion = '1.0.27+93';
 
 class SiteShell extends StatefulWidget {
   const SiteShell({super.key, required this.child});
@@ -90,13 +90,16 @@ class _SiteShellState extends State<SiteShell> {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            'DaycareFinder.com',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          child: InkWell(
+            onTap: () => _goHomeIfNeeded(context),
+            child: Text(
+              'DaycareFinder.com',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
           ),
         ),
         FilledButton.tonalIcon(
